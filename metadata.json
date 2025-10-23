@@ -1,5 +1,7 @@
 {
-  "name": "SMART B.L.O.",
+  "name": "Smart B.L.O.",
   "description": "An advanced, in-browser tool to search, edit, and manage voter data from Excel files. Features include advanced search, a full-featured data editor with row/column operations, and data highlighting, all wrapped in a sleek black and gold interface.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }

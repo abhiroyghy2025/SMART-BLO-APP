@@ -2,7 +2,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import type { VoterRecord } from '../types';
 import { DataTable } from './DataTable';
 import { Modal } from './Modal';
-import { DownloadIcon, TrashIcon, CopyIcon, HighlightIcon, ResetIcon, HomeIcon, PlusIcon, EditIcon, ColumnsIcon, UndoIcon, RedoIcon } from './icons';
+import { DownloadIcon, TrashIcon, CopyIcon, HighlightIcon, ResetIcon, HomeIcon, PlusIcon, EditIcon, ColumnsIcon, UndoIcon, RedoIcon, GeminiIcon } from './icons';
+import { useGemini } from '../hooks/useGemini';
 
 declare const XLSX: any;
 
@@ -61,6 +62,7 @@ const useHistory = (initialState: EditorState) => {
 export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHeaders, onReset, fileName, onGoHome }) => {
     const { state, setState, undo, redo, canUndo, canRedo } = useHistory({ data: initialData, headers: initialHeaders });
     const { data, headers } = state;
+    const ai = useGemini();
     
     const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
     const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
@@ -71,6 +73,44 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
     const [isBatchUpdateOpen, setIsBatchUpdateOpen] = useState(false);
     const [batchUpdateConfig, setBatchUpdateConfig] = useState({ column: headers.filter(h => h !== SERIAL_NUMBER_HEADER)[0] ?? '', value: '' });
     const [isDeleteConfirmModalOpen, setIsDeleteConfirmModalOpen] = useState(false);
+    const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+    const handleAnalyzeSelection = async () => {
+        if (selectedRows.size === 0 || !ai) return;
+    
+        setIsAnalyzing(true);
+        setAnalysisResult('');
+        setIsAnalysisModalOpen(true);
+    
+        const selectedData = data.filter(row => selectedRows.has(row.__id));
+        const cleanData = selectedData.map(({ __id, __highlighted, ...rest }) => rest);
+        
+        const dataString = JSON.stringify(cleanData, null, 2);
+    
+        const prompt = `You are a helpful data analyst. Analyze the following JSON data which contains a list of voter records. Provide a concise summary of the key insights. Focus on:
+    1.  Demographic summary (e.g., age distribution if available, gender distribution).
+    2.  Any potential data quality issues like missing values or inconsistencies.
+    3.  Any interesting patterns or groupings you observe.
+    Do not just repeat the data. Provide actionable insights. Format your response using markdown.
+    
+    Data:
+    ${dataString}`;
+    
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-pro',
+                contents: prompt,
+            });
+            setAnalysisResult(response.text);
+        } catch (error) {
+            console.error("Error analyzing data with Gemini:", error);
+            setAnalysisResult("An error occurred while analyzing the data. Please try again.");
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
 
     const resequenceData = (dataToSequence: VoterRecord[]) => {
         return dataToSequence.map((row, index) => ({
@@ -257,10 +297,11 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
         { label: 'Duplicate Selected', icon: CopyIcon, action: duplicateSelectedRows, disabled: selectedRows.size === 0 },
         { label: 'Highlight Selected', icon: HighlightIcon, action: highlightSelectedRows, disabled: selectedRows.size === 0 },
         { label: 'Batch Update', icon: EditIcon, action: () => setIsBatchUpdateOpen(true), disabled: selectedRows.size === 0 },
+        { label: 'Analyze with AI', icon: GeminiIcon, action: handleAnalyzeSelection, disabled: selectedRows.size === 0 || !ai },
         { label: 'Manage Columns', icon: ColumnsIcon, action: () => setIsColumnManagerOpen(true), disabled: false },
         { label: 'Download Excel', icon: DownloadIcon, action: downloadExcel, disabled: false },
         { label: 'Upload New File', icon: ResetIcon, action: onReset, disabled: false },
-    ], [selectedRows.size, downloadExcel, onReset, headers, data, undo, redo, canUndo, canRedo]);
+    ], [selectedRows.size, downloadExcel, onReset, headers, data, undo, redo, canUndo, canRedo, ai]);
 
     return (
         <div className="space-y-6">
@@ -341,6 +382,28 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                         </div>
                     </div>
                 </form>
+            </Modal>
+            
+            <Modal isOpen={isAnalysisModalOpen} onClose={() => setIsAnalysisModalOpen(false)} title="AI Data Analysis">
+                <div className="max-h-[60vh] overflow-y-auto pr-2">
+                    {isAnalyzing ? (
+                        <div className="flex items-center justify-center gap-3">
+                            <GeminiIcon className="w-8 h-8 text-yellow-400 animate-spin" />
+                            <p className="text-lg text-gray-300">Analyzing data, please wait...</p>
+                        </div>
+                    ) : (
+                        <pre className="whitespace-pre-wrap text-gray-300 font-sans">{analysisResult}</pre>
+                    )}
+                </div>
+                 <div className="flex justify-end gap-4 pt-4 mt-4 border-t border-gray-700">
+                    <button
+                        type="button"
+                        onClick={() => setIsAnalysisModalOpen(false)}
+                        className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
             </Modal>
 
             <Modal isOpen={isColumnManagerOpen} onClose={() => setIsColumnManagerOpen(false)} title="Manage Columns">

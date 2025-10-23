@@ -14,12 +14,14 @@ const URLS_TO_CACHE = [
     '/components/icons.tsx',
     '/components/Modal.tsx',
     '/components/SearchPage.tsx',
+    '/hooks/useGemini.ts',
     '/icon.svg',
     'https://cdn.tailwindcss.com',
     'https://unpkg.com/react@18/umd/react.production.min.js',
     'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-    'https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Dancing+Script:wght@700&family=Lora:wght@400&display=swap'
+    'https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Dancing+Script:wght@700&family=Lora:wght@400&display=swap',
+    'https://aistudiocdn.com/@google/genai@^0.14.0'
 ];
 
 self.addEventListener('install', (event) => {

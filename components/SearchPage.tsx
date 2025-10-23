@@ -1,7 +1,137 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { VoterRecord } from '../types';
 import { Modal } from './Modal';
-import { SearchIcon, HomeIcon, ChevronDownIcon, ChevronUpIcon } from './icons';
+import { SearchIcon, HomeIcon, ChevronDownIcon, ChevronUpIcon, MicrophoneIcon, PlusIcon } from './icons';
+import { useGemini } from '../hooks/useGemini';
+import { GoogleGenAI, Type } from '@google/genai';
+
+// --- Speech Recognition Hook ---
+interface SpeechRecognitionHook {
+    text: string;
+    isListening: boolean;
+    startListening: () => void;
+    stopListening: () => void;
+    hasRecognitionSupport: boolean;
+}
+
+const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+const useSpeechRecognition = (): SpeechRecognitionHook => {
+    const [text, setText] = useState('');
+    const [isListening, setIsListening] = useState(false);
+    const recognitionRef = useRef<any>(null);
+
+    useEffect(() => {
+        if (!SpeechRecognition) {
+            console.error("Speech Recognition API not supported in this browser.");
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event: any) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            setText(finalTranscript || interimTranscript);
+        };
+
+        recognition.onerror = (event: any) => {
+            if (event.error !== 'aborted' && event.error !== 'no-speech') {
+                console.error('Speech recognition error', event.error);
+            }
+            setIsListening(false);
+        };
+
+        recognition.onend = () => {
+             setIsListening(false);
+        };
+        
+        recognitionRef.current = recognition;
+
+        return () => {
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+            }
+        };
+    }, []);
+
+    const startListening = () => {
+        if (recognitionRef.current && !isListening) {
+            setText('');
+            recognitionRef.current.start();
+            setIsListening(true);
+        }
+    };
+
+    const stopListening = () => {
+        if (recognitionRef.current && isListening) {
+            recognitionRef.current.stop();
+            setIsListening(false);
+        }
+    };
+
+    return {
+        text,
+        isListening,
+        startListening,
+        stopListening,
+        hasRecognitionSupport: !!SpeechRecognition,
+    };
+};
+// --- End Speech Recognition Hook ---
+
+const parseVoiceInputWithGemini = async (transcript: string, headers: string[], ai: GoogleGenAI): Promise<Partial<VoterRecord>> => {
+    if (!transcript.trim() || headers.length === 0) {
+        return {};
+    }
+
+    const properties: { [key: string]: { type: Type.STRING, description: string } } = {};
+    headers.forEach(header => {
+        if (header.toLowerCase() !== 'serial no in the voter list') {
+            properties[header] = {
+                type: Type.STRING,
+                description: `The value for the '${header}' field.`
+            };
+        }
+    });
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: properties,
+    };
+    
+    const prompt = `Analyze the following text and extract the information into a JSON object matching the provided schema. The user is filling out a form with the following fields: ${headers.join(', ')}. The text is: "${transcript}". Handle natural language like "set the name to..." or "the age is...". Only return fields mentioned in the text.`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+            },
+        });
+
+        const jsonText = response.text.trim();
+        const parsedJson = JSON.parse(jsonText);
+        return parsedJson as Partial<VoterRecord>;
+
+    } catch (error) {
+        console.error("Error parsing voice input with Gemini:", error);
+        return {};
+    }
+};
+
 
 interface SearchPageProps {
     data: VoterRecord[];
@@ -18,6 +148,15 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
     const [selectedRecord, setSelectedRecord] = useState<VoterRecord | null>(null);
     const [selectedSearchColumns, setSelectedSearchColumns] = useState<Set<string>>(new Set(headers));
     const [showColumnSelector, setShowColumnSelector] = useState<boolean>(false);
+    const [isAddVoterModalOpen, setIsAddVoterModalOpen] = useState(false);
+
+    const { text: voiceSearchText, isListening: isVoiceSearching, startListening: startVoiceSearch, stopListening: stopVoiceSearch, hasRecognitionSupport } = useSpeechRecognition();
+    
+    useEffect(() => {
+        if (voiceSearchText) {
+            setSearchTerm(voiceSearchText);
+        }
+    }, [voiceSearchText]);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -31,8 +170,6 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
         }
 
         const lowercasedQuery = searchTerm.toLowerCase().trim();
-        // FIX: A row value can be of any type (e.g., a number). It must be converted to a string
-        // before calling .toLowerCase() to prevent a runtime error.
         const results = data.filter(row => 
             Array.from(selectedSearchColumns).some(key => 
                 String(row[key] ?? '').toLowerCase().includes(lowercasedQuery)
@@ -81,6 +218,29 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
         }
     };
 
+    const handleSaveNewVoter = (newRecordData: Partial<VoterRecord>) => {
+        const serialHeader = 'SERIAL NO IN THE VOTER LIST';
+        const lastSerial = Math.max(0, ...data.map(r => typeof r[serialHeader] === 'number' ? r[serialHeader] : 0));
+        
+        const newVoter: VoterRecord = {
+            __id: `row_new_${Date.now()}`,
+            ...newRecordData,
+            [serialHeader]: lastSerial + 1,
+        };
+
+        headers.forEach(h => {
+            if (!(h in newVoter)) {
+                // FIX: This dynamic assignment is valid because the VoterRecord type has a string index 
+                // signature `[key: string]: any`, allowing properties to be added dynamically.
+                newVoter[h] = '';
+            }
+        });
+
+        onDataUpdate([...data, newVoter]);
+        setIsAddVoterModalOpen(false);
+        alert('New voter added successfully!');
+    };
+
     return (
         <div className="space-y-6">
             <header className="flex flex-col md:flex-row items-center justify-between gap-4">
@@ -97,7 +257,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
                 Total Number of Voters: <span className="font-bold text-yellow-300">{totalRecords.toLocaleString()}</span>
             </p>
             
-            <div className="flex justify-center py-8">
+            <div className="flex flex-col items-center justify-center py-8">
                 <form onSubmit={handleSearch} className="w-full max-w-2xl">
                     <div className="relative">
                         <input
@@ -105,11 +265,21 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Search by name, serial no., or any other detail..."
-                            className="w-full bg-gray-900 border-2 border-yellow-500/60 rounded-full py-4 pl-14 pr-6 text-lg focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-white transition-all shadow-md shadow-yellow-500/10"
+                            className="w-full bg-gray-900 border-2 border-yellow-500/60 rounded-full py-4 pl-14 pr-16 text-lg focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-white transition-all shadow-md shadow-yellow-500/10"
                         />
                         <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
                             <SearchIcon className="w-6 h-6 text-gray-400" />
                         </div>
+                         {hasRecognitionSupport && (
+                            <button
+                                type="button"
+                                onClick={isVoiceSearching ? stopVoiceSearch : startVoiceSearch}
+                                className={`absolute inset-y-0 right-0 pr-5 flex items-center focus:outline-none ${isVoiceSearching ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-white'}`}
+                                title={isVoiceSearching ? 'Stop listening' : 'Search with voice'}
+                            >
+                                <MicrophoneIcon className="w-6 h-6" />
+                            </button>
+                        )}
                     </div>
 
                     <div className="mt-4">
@@ -159,6 +329,14 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
                         <span>Search</span>
                     </button>
                 </form>
+
+                 <button 
+                    onClick={() => setIsAddVoterModalOpen(true)}
+                    className="w-full max-w-2xl mt-4 bg-green-600 text-white font-bold py-3 px-6 rounded-full hover:bg-green-500 transition-colors text-lg flex items-center justify-center gap-2 shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-400/30"
+                 >
+                    <PlusIcon className="w-6 h-6" />
+                    <span>Add New/Missing Voter</span>
+                </button>
             </div>
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Search Results">
@@ -170,6 +348,13 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
                     onUpdateRecord={handleUpdateRecord}
                 />
             </Modal>
+            
+            <VoterFormModal 
+                isOpen={isAddVoterModalOpen}
+                onClose={() => setIsAddVoterModalOpen(false)}
+                onSave={handleSaveNewVoter}
+                headers={headers.filter(h => h !== 'SERIAL NO IN THE VOTER LIST')}
+            />
         </div>
     );
 };
@@ -186,8 +371,10 @@ interface SearchResultContentProps {
 const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, headers, selectedRecord, onSelectRecord, onUpdateRecord }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editableRecord, setEditableRecord] = useState<VoterRecord | null>(null);
+    const { text: voiceEditText, isListening: isVoiceEditing, startListening: startVoiceEdit, stopListening: stopVoiceEdit, hasRecognitionSupport } = useSpeechRecognition();
+    const ai = useGemini();
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (selectedRecord) {
             setEditableRecord({ ...selectedRecord });
         } else {
@@ -195,6 +382,21 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, head
             setIsEditing(false);
         }
     }, [selectedRecord]);
+    
+    const handleVoiceUpdate = useCallback(async (transcript: string) => {
+        if (!ai || !editableRecord) return;
+        const updates = await parseVoiceInputWithGemini(transcript, headers, ai);
+        if (Object.keys(updates).length > 0) {
+            setEditableRecord(prev => ({ ...prev!, ...updates }));
+            alert(`Updated fields via voice: ${Object.keys(updates).join(', ')}`);
+        }
+    }, [ai, editableRecord, headers]);
+    
+    useEffect(() => {
+        if (voiceEditText && !isVoiceEditing) {
+            handleVoiceUpdate(voiceEditText);
+        }
+    }, [voiceEditText, isVoiceEditing, handleVoiceUpdate]);
     
     const handleEditChange = (key: string, value: string) => {
         if(editableRecord) {
@@ -212,7 +414,7 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, head
     if (selectedRecord && editableRecord) {
         return (
             <div>
-                <button onClick={() => onSelectRecord(null)} className="text-yellow-400 hover:underline mb-4">&larr; Back to list</button>
+                <button onClick={() => { onSelectRecord(null); setIsEditing(false); }} className="text-yellow-400 hover:underline mb-4">&larr; Back to list</button>
                 <div className="space-y-2">
                     {headers.map(header => (
                         <div key={header} className="grid grid-cols-3 gap-4 border-b border-gray-700 py-2">
@@ -222,7 +424,7 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, head
                                   type="text"
                                   value={editableRecord[header] || ''}
                                   onChange={(e) => handleEditChange(header, e.target.value)}
-                                  className="col-span-2 bg-gray-700 border border-gray-600 rounded p-1 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                                  className="col-span-2 bg-gray-800 border border-gray-600 rounded p-1 text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
                                 />
                             ) : (
                                 <span className="text-white col-span-2">{selectedRecord[header]}</span>
@@ -230,7 +432,7 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, head
                         </div>
                     ))}
                 </div>
-                <div className="mt-6 flex gap-4">
+                <div className="mt-6 flex gap-4 items-center">
                     {isEditing ? (
                         <>
                            <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition-colors">Save Changes</button>
@@ -239,6 +441,15 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, head
                     ) : (
                          <button onClick={() => setIsEditing(true)} className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded transition-colors">Edit this Record</button>
                     )}
+                     {isEditing && hasRecognitionSupport && (
+                        <button
+                            onClick={isVoiceEditing ? stopVoiceEdit : startVoiceEdit}
+                            className={`p-2 rounded-full transition-colors ${isVoiceEditing ? 'bg-red-500 animate-pulse' : 'bg-blue-500 hover:bg-blue-400'} text-white`}
+                            title={isVoiceEditing ? 'Stop listening' : 'Update fields with voice'}
+                        >
+                            <MicrophoneIcon className="w-6 h-6" />
+                        </button>
+                    )}
                 </div>
             </div>
         );
@@ -246,20 +457,111 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, head
 
     return (
         <div className="max-h-[60vh] overflow-y-auto">
-            <p className="text-gray-400 mb-4">{results.length} matching records found.</p>
+            <p className="text-gray-400 mb-4">{results.length} matching record{results.length !== 1 && 's'} found.</p>
             <ul className="space-y-2">
-                {results.map(record => (
-                    <li key={record.__id}>
-                        <button
-                            onClick={() => onSelectRecord(record)}
-                            className="w-full text-left bg-gray-800 hover:bg-gray-700 p-3 rounded-md transition-colors"
-                        >
-                            <p className="font-semibold text-yellow-400">{record[headers[1]] || 'N/A'}</p>
-                            <p className="text-sm text-gray-300">Serial No: {record[headers[0]] || 'N/A'}</p>
-                        </button>
-                    </li>
-                ))}
+                {results.map(record => {
+                    const nameHeader = headers.find(h => h.toLowerCase().includes('name'));
+                    const displayName = (nameHeader && record[nameHeader]) || (headers.length > 1 && record[headers[1]]) || 'N/A';
+                    return (
+                        <li key={record.__id}>
+                            <button
+                                onClick={() => onSelectRecord(record)}
+                                className="w-full text-left bg-gray-800 hover:bg-gray-700 p-3 rounded-md transition-colors"
+                            >
+                                <p className="font-semibold text-yellow-400">{displayName}</p>
+                                <p className="text-sm text-gray-300">Serial No: {record[headers[0]] || 'N/A'}</p>
+                            </button>
+                        </li>
+                    );
+                })}
             </ul>
         </div>
     );
 }
+
+interface VoterFormModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (record: Partial<VoterRecord>) => void;
+    headers: string[];
+}
+
+const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSave, headers }) => {
+    const [newRecord, setNewRecord] = useState<Partial<VoterRecord>>({});
+    const { text: voiceInputText, isListening, startListening, stopListening, hasRecognitionSupport } = useSpeechRecognition();
+    const ai = useGemini();
+
+    useEffect(() => {
+        if (!isOpen) {
+            setNewRecord({});
+        }
+    }, [isOpen]);
+
+    const handleVoiceUpdate = useCallback(async (transcript: string) => {
+        if (!ai) return;
+        const updates = await parseVoiceInputWithGemini(transcript, headers, ai);
+        if (Object.keys(updates).length > 0) {
+            setNewRecord(prev => ({...prev, ...updates}));
+            alert(`Added data via voice for: ${Object.keys(updates).join(', ')}`);
+        }
+    }, [ai, headers]);
+
+    useEffect(() => {
+        if (voiceInputText && !isListening) {
+            handleVoiceUpdate(voiceInputText);
+        }
+    }, [voiceInputText, isListening, handleVoiceUpdate]);
+
+    const handleChange = (key: string, value: string) => {
+        setNewRecord(prev => ({...prev, [key]: value}));
+    };
+
+    const handleSave = () => {
+        onSave(newRecord);
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Add New/Missing Voter">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                {headers.map(header => (
+                    <div key={header}>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">{header}</label>
+                        <input
+                            type="text"
+                            value={(newRecord[header] as string) || ''}
+                            onChange={(e) => handleChange(header, e.target.value)}
+                            className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                        />
+                    </div>
+                ))}
+            </div>
+            <div className="flex justify-between items-center gap-4 pt-6 mt-4 border-t border-gray-700">
+                <div className="flex items-center gap-4">
+                     <button
+                        type="button"
+                        onClick={handleSave}
+                        className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded transition-colors"
+                    >
+                        Save Voter
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition-colors"
+                    >
+                        Cancel
+                    </button>
+                </div>
+                 {hasRecognitionSupport && ai && (
+                    <button
+                        onClick={isListening ? stopListening : startListening}
+                        className={`p-2 rounded-full transition-colors ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500 hover:bg-blue-400'} text-white`}
+                        title={isListening ? 'Stop listening' : 'Fill form with voice'}
+                    >
+                        <MicrophoneIcon className="w-6 h-6" />
+                    </button>
+                )}
+            </div>
+        </Modal>
+    );
+};
