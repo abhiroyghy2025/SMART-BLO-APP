@@ -31,7 +31,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
         }
 
         const lowercasedQuery = searchTerm.toLowerCase().trim();
-        // FIX: Refactored search logic to be more efficient and type-safe by ensuring row values are strings before comparison.
+        // FIX: A row value can be of any type (e.g., a number). It must be converted to a string
+        // before calling .toLowerCase() to prevent a runtime error.
         const results = data.filter(row => 
             Array.from(selectedSearchColumns).some(key => 
                 String(row[key] ?? '').toLowerCase().includes(lowercasedQuery)

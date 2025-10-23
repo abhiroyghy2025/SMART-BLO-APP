@@ -79,7 +79,8 @@ export const DataTable: React.FC<DataTableProps> = ({
             processableData = processableData.filter(row => {
                 return activeFilters.every(([header, filterValue]) => {
                     const cellValue = row[header];
-                    // FIX: The cell value can be of any type. It must be converted to a string before calling .toLowerCase() to prevent a runtime error on non-string values.
+                    // FIX: The cell value can be of any type (e.g., a number), which would cause a runtime
+                    // error on `.toLowerCase()`. Convert it to a string first to ensure type safety.
                     return String(cellValue ?? '').toLowerCase().includes(filterValue.toLowerCase());
                 });
             });
