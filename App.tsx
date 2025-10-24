@@ -17,7 +17,7 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [view, setView] = useState<AppView>('home');
     const [fileName, setFileName] = useState<string>('export.xlsx');
-    const [footerData, setFooterData] = useState<any[][]>([]);
+    const [sheet2Data, setSheet2Data] = useState<any[][]>([]);
 
     const handleFileLoad = useCallback((file: File) => {
         setIsLoading(true);
@@ -40,15 +40,13 @@ const App: React.FC = () => {
                 }
                 
                 const originalHeaderRow: string[] = jsonData[0].map(String);
-                const allDataRows: any[][] = jsonData.slice(1);
-
-                const FOOTER_ROW_COUNT = 4;
-                let mainDataRows: any[][] = allDataRows;
-                let footerRows: any[][] = [];
-
-                if (allDataRows.length > FOOTER_ROW_COUNT) {
-                    mainDataRows = allDataRows.slice(0, allDataRows.length - FOOTER_ROW_COUNT);
-                    footerRows = allDataRows.slice(allDataRows.length - FOOTER_ROW_COUNT);
+                const mainDataRows: any[][] = jsonData.slice(1);
+                
+                let sheet2Rows: any[][] = [];
+                if (workbook.SheetNames.length > 1) {
+                    const secondSheetName = workbook.SheetNames[1];
+                    const secondWorksheet = workbook.Sheets[secondSheetName];
+                    sheet2Rows = XLSX.utils.sheet_to_json(secondWorksheet, { header: 1 });
                 }
                 
                 const serialNumberHeader = 'SERIAL NO IN THE VOTER LIST';
@@ -67,13 +65,13 @@ const App: React.FC = () => {
 
                 setHeaders(finalHeaders);
                 setData(rowsData);
-                setFooterData(footerRows);
+                setSheet2Data(sheet2Rows);
             } catch (err) {
                 console.error("Error parsing file:", err);
                 setError(err instanceof Error ? err.message : "An unknown error occurred during file processing.");
                 setData([]);
                 setHeaders([]);
-                setFooterData([]);
+                setSheet2Data([]);
             } finally {
                 setIsLoading(false);
             }
@@ -89,7 +87,7 @@ const App: React.FC = () => {
         setData([]);
         setHeaders([]);
         setError(null);
-        setFooterData([]);
+        setSheet2Data([]);
     }
 
     const handleGoHome = () => {
@@ -105,7 +103,7 @@ const App: React.FC = () => {
 
         switch(view) {
             case 'home':
-                return <HomeScreen onNavigate={handleNavigate} voterCount={data.length} footerData={footerData}/>;
+                return <HomeScreen onNavigate={handleNavigate} voterCount={data.length} sheet2Data={sheet2Data}/>;
             case 'search':
                 return noDataLoaded ? (
                     <FileUpload onFileLoad={handleFileLoad} isLoading={isLoading} error={error} />
@@ -131,7 +129,7 @@ const App: React.FC = () => {
                     />
                 );
             default:
-                return <HomeScreen onNavigate={handleNavigate} voterCount={data.length} footerData={footerData} />;
+                return <HomeScreen onNavigate={handleNavigate} voterCount={data.length} sheet2Data={sheet2Data} />;
         }
     }
 

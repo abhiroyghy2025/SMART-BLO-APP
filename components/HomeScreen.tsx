@@ -5,17 +5,10 @@ import type { AppView } from '../App';
 interface HomeScreenProps {
     onNavigate: (view: Exclude<AppView, 'home'>) => void;
     voterCount: number;
-    footerData: any[][];
+    sheet2Data: any[][];
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, voterCount, footerData }) => {
-    const specialKeysWithoutColon = [
-        'LAC NO & NAME',
-        'PS NO & NAME',
-        'NAME OF THE B.L.O.',
-        'CONTACT NO'
-    ];
-
+export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, voterCount, sheet2Data }) => {
     return (
         <div className="flex flex-col items-center justify-center min-h-[70vh] text-center animate-fadeIn">
             <style>{`
@@ -56,19 +49,40 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, voterCount, 
                     </span>
                 </button>
             </div>
-            {footerData && footerData.length > 0 && (
+            {sheet2Data && sheet2Data.length > 0 && (
                 <div className="mt-12 pt-8 border-t border-yellow-500/30 w-full max-w-4xl">
-                    {footerData.map((row, index) => {
-                        const key = row[0];
-                        const value = row[1];
-                        if (!key) return null;
+                    {sheet2Data.map((row, index) => {
+                        if (!row || row.every(cell => cell === null || String(cell).trim() === '')) {
+                            return null;
+                        }
                         
-                        const shouldAddColon = !specialKeysWithoutColon.includes(key);
+                        const key = String(row[0] ?? '').trim();
+                        const value = row.slice(1).map(cell => String(cell ?? '').trim()).join(' ').trim();
+                        
+                        if (!key && !value) {
+                            return null;
+                        }
+
+                        if (!value) {
+                             return (
+                                <p key={index} className="text-lg font-cambria mb-2 text-center font-bold text-yellow-400">
+                                   {key}
+                                </p>
+                            );
+                        }
+
+                        if (!key) {
+                             return (
+                                <p key={index} className="text-lg font-cambria mb-2 text-center text-white">
+                                   {value}
+                                </p>
+                            );
+                        }
 
                         return (
                             <p key={index} className="text-lg font-cambria mb-2 text-center">
-                                <span className="text-white">{key}{shouldAddColon ? ':' : ''} </span>
-                                <span className="font-bold text-yellow-400">{value ?? ''}</span>
+                                <span className="text-white">{key}: </span>
+                                <span className="font-bold text-yellow-400">{value}</span>
                             </p>
                         );
                     })}

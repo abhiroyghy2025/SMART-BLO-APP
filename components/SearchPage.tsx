@@ -244,10 +244,11 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
             [serialHeader]: lastSerial + 1,
         };
 
+        // FIX: Ensure properties for all headers exist on the new voter record.
+        // This prevents data inconsistency and resolves potential indexing errors by ensuring
+        // the object shape is complete.
         headers.forEach(h => {
-            if (!(h in newVoter)) {
-                // FIX: Ensure properties for all headers exist on the new voter record.
-                // The VoterRecord type has an index signature that allows this assignment.
+            if (!Object.prototype.hasOwnProperty.call(newVoter, h)) {
                 newVoter[h] = '';
             }
         });
