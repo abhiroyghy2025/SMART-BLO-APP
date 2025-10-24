@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { VoterRecord } from '../types';
-import { TrashIcon, EditIcon, ChevronDownIcon, ChevronUpIcon } from './icons';
+import { TrashIcon, EditIcon, ChevronDownIcon, ChevronUpIcon, SortIcon } from './icons';
 
 interface DataTableProps {
     data: VoterRecord[];
@@ -78,10 +78,9 @@ export const DataTable: React.FC<DataTableProps> = ({
         if (activeFilters.length > 0) {
             processableData = processableData.filter(row => {
                 return activeFilters.every(([header, filterValue]) => {
-                    const cellValue = row[header];
                     // FIX: A cell value can be of any type (e.g., number or null).
                     // To prevent a 'toLowerCase' on unknown type error, it must be converted to a string.
-                    const stringValue = String(cellValue ?? '');
+                    const stringValue = String(row[header] ?? '');
                     return stringValue.toLowerCase().includes(filterValue.toLowerCase());
                 });
             });
@@ -231,7 +230,10 @@ export const DataTable: React.FC<DataTableProps> = ({
                                 ) : (
                                     <div className="flex items-center justify-between gap-2">
                                         <span className="truncate" title={header}>{header}</span>
-                                        {sortConfig && sortConfig.key === header && (sortConfig.direction === 'ascending' ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />)}
+                                        {sortConfig && sortConfig.key === header 
+                                            ? (sortConfig.direction === 'ascending' ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />) 
+                                            : (!readOnlyColumns.includes(header) && <SortIcon className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />)
+                                        }
                                         {!readOnlyColumns.includes(header) && (
                                             <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-auto space-x-2">
                                                 <button onClick={(e) => { e.stopPropagation(); setEditingHeader({ oldName: header, newName: header }); }} className="text-yellow-400 hover:text-yellow-300" title={`Rename "${header}" column`}><EditIcon className="w-4 h-4" /></button>

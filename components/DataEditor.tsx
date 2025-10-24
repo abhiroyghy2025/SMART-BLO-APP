@@ -103,6 +103,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                 model: 'gemini-2.5-pro',
                 contents: prompt,
             });
+            // FIX: Access the generated text directly from the `text` property of the response object.
             setAnalysisResult(response.text);
         } catch (error) {
             console.error("Error analyzing data with Gemini:", error);

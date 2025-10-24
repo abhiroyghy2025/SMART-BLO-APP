@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { VoterRecord } from '../types';
 import { Modal } from './Modal';
-import { SearchIcon, HomeIcon, ChevronDownIcon, ChevronUpIcon, MicrophoneIcon, PlusIcon } from './icons';
+import { SearchIcon, HomeIcon, ChevronDownIcon, ChevronUpIcon, MicrophoneIcon, PlusIcon, TrashIcon, EditIcon } from './icons';
 import { useGemini } from '../hooks/useGemini';
 import { GoogleGenAI, Type } from '@google/genai';
 
@@ -122,6 +122,7 @@ const parseVoiceInputWithGemini = async (transcript: string, headers: string[], 
             },
         });
 
+        // FIX: Access the generated text directly from the `text` property of the response object.
         const jsonText = response.text.trim();
         const parsedJson = JSON.parse(jsonText);
         return parsedJson as Partial<VoterRecord>;
@@ -198,6 +199,21 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
         }
     }
 
+    const handleBulkDataChange = (newData: VoterRecord[]) => {
+        onDataUpdate(newData);
+        if (searchTerm.trim()) {
+            const lowercasedQuery = searchTerm.toLowerCase().trim();
+            const results = newData.filter(row => 
+                Array.from(selectedSearchColumns).some(key => 
+                    String(row[key] ?? '').toLowerCase().includes(lowercasedQuery)
+                )
+            );
+            setSearchResults(results);
+        } else {
+            setSearchResults([]);
+        }
+    };
+
     const handleColumnSelectionChange = (header: string) => {
         setSelectedSearchColumns(prev => {
             const newSet = new Set(prev);
@@ -230,8 +246,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
 
         headers.forEach(h => {
             if (!(h in newVoter)) {
-                // FIX: This dynamic assignment is valid because the VoterRecord type has a string index 
-                // signature `[key: string]: any`, allowing properties to be added dynamically.
+                // FIX: Ensure properties for all headers exist on the new voter record.
+                // The VoterRecord type has an index signature that allows this assignment.
                 newVoter[h] = '';
             }
         });
@@ -341,11 +357,13 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Search Results">
                 <SearchResultContent
+                    data={data}
                     results={searchResults}
                     headers={headers}
                     selectedRecord={selectedRecord}
                     onSelectRecord={setSelectedRecord}
                     onUpdateRecord={handleUpdateRecord}
+                    onBulkDataChange={handleBulkDataChange}
                 />
             </Modal>
             
@@ -361,18 +379,26 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
 
 
 interface SearchResultContentProps {
+    data: VoterRecord[];
     results: VoterRecord[];
     headers: string[];
     selectedRecord: VoterRecord | null;
     onSelectRecord: (record: VoterRecord | null) => void;
     onUpdateRecord: (record: VoterRecord) => void;
+    onBulkDataChange: (data: VoterRecord[]) => void;
 }
 
-const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, headers, selectedRecord, onSelectRecord, onUpdateRecord }) => {
+const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results, headers, selectedRecord, onSelectRecord, onUpdateRecord, onBulkDataChange }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editableRecord, setEditableRecord] = useState<VoterRecord | null>(null);
     const { text: voiceEditText, isListening: isVoiceEditing, startListening: startVoiceEdit, stopListening: stopVoiceEdit, hasRecognitionSupport } = useSpeechRecognition();
     const ai = useGemini();
+    
+    const [selectedForBulk, setSelectedForBulk] = useState<Set<string>>(new Set());
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    const [isBulkUpdateOpen, setIsBulkUpdateOpen] = useState(false);
+    const [bulkUpdateConfig, setBulkUpdateConfig] = useState({ column: headers.filter(h => h !== 'SERIAL NO IN THE VOTER LIST')[0] ?? '', value: '' });
+    const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (selectedRecord) {
@@ -382,6 +408,18 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, head
             setIsEditing(false);
         }
     }, [selectedRecord]);
+
+    useEffect(() => {
+        setSelectedForBulk(new Set());
+    }, [results]);
+
+    useEffect(() => {
+        if (selectAllCheckboxRef.current) {
+            const numVisibleRows = results.length;
+            const numSelectedVisibleRows = results.filter(r => selectedForBulk.has(r.__id)).length;
+            selectAllCheckboxRef.current.indeterminate = numSelectedVisibleRows > 0 && numSelectedVisibleRows < numVisibleRows;
+        }
+    }, [selectedForBulk, results]);
     
     const handleVoiceUpdate = useCallback(async (transcript: string) => {
         if (!ai || !editableRecord) return;
@@ -410,12 +448,58 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, head
             setIsEditing(false);
         }
     }
+
+    const handleSelectAllForBulk = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            setSelectedForBulk(new Set(results.map(r => r.__id)));
+        } else {
+            setSelectedForBulk(new Set());
+        }
+    };
+
+    const handleRowSelectForBulk = (rowId: string) => {
+        setSelectedForBulk(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(rowId)) {
+                newSet.delete(rowId);
+            } else {
+                newSet.add(rowId);
+            }
+            return newSet;
+        });
+    };
+
+    const handleBulkDeleteClick = () => {
+        if (selectedForBulk.size > 0) {
+            setIsDeleteConfirmOpen(true);
+        }
+    };
+
+    const confirmBulkDelete = () => {
+        const newData = data.filter(row => !selectedForBulk.has(row.__id));
+        onBulkDataChange(newData);
+        setSelectedForBulk(new Set());
+        setIsDeleteConfirmOpen(false);
+    };
+
+    const applyBulkUpdate = () => {
+        if (!bulkUpdateConfig.column || selectedForBulk.size === 0) return;
+        const newData = data.map(row => {
+            if (selectedForBulk.has(row.__id)) {
+                return { ...row, [bulkUpdateConfig.column]: bulkUpdateConfig.value };
+            }
+            return row;
+        });
+        onBulkDataChange(newData);
+        setIsBulkUpdateOpen(false);
+        setSelectedForBulk(new Set());
+    };
     
     if (selectedRecord && editableRecord) {
         return (
             <div>
                 <button onClick={() => { onSelectRecord(null); setIsEditing(false); }} className="text-yellow-400 hover:underline mb-4">&larr; Back to list</button>
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
                     {headers.map(header => (
                         <div key={header} className="grid grid-cols-3 gap-4 border-b border-gray-700 py-2">
                             <strong className="text-gray-400 col-span-1">{header}:</strong>
@@ -456,25 +540,121 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ results, head
     }
 
     return (
-        <div className="max-h-[60vh] overflow-y-auto">
-            <p className="text-gray-400 mb-4">{results.length} matching record{results.length !== 1 && 's'} found.</p>
-            <ul className="space-y-2">
-                {results.map(record => {
-                    const nameHeader = headers.find(h => h.toLowerCase().includes('name'));
-                    const displayName = (nameHeader && record[nameHeader]) || (headers.length > 1 && record[headers[1]]) || 'N/A';
-                    return (
-                        <li key={record.__id}>
-                            <button
-                                onClick={() => onSelectRecord(record)}
-                                className="w-full text-left bg-gray-800 hover:bg-gray-700 p-3 rounded-md transition-colors"
-                            >
-                                <p className="font-semibold text-yellow-400">{displayName}</p>
-                                <p className="text-sm text-gray-300">Serial No: {record[headers[0]] || 'N/A'}</p>
-                            </button>
-                        </li>
-                    );
-                })}
-            </ul>
+        <div className="max-h-[70vh] flex flex-col">
+            <p className="text-gray-400 mb-4 flex-shrink-0">{results.length} matching record{results.length !== 1 && 's'} found.</p>
+            
+            {results.length > 0 && (
+                <div className="flex items-center gap-2 mb-4 flex-shrink-0">
+                    <button
+                        onClick={handleBulkDeleteClick}
+                        disabled={selectedForBulk.size === 0}
+                        className="flex items-center gap-2 bg-red-800 text-red-200 border border-red-500/50 px-3 py-2 rounded-md hover:bg-red-600 hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-400/50 disabled:border-gray-500/50"
+                    >
+                        <TrashIcon className="w-5 h-5" />
+                        <span>Delete Selected ({selectedForBulk.size})</span>
+                    </button>
+                    <button
+                        onClick={() => setIsBulkUpdateOpen(true)}
+                        disabled={selectedForBulk.size === 0}
+                        className="flex items-center gap-2 bg-blue-800 text-blue-200 border border-blue-500/50 px-3 py-2 rounded-md hover:bg-blue-600 hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-400/50 disabled:border-gray-500/50"
+                    >
+                        <EditIcon className="w-5 h-5" />
+                        <span>Update Selected ({selectedForBulk.size})</span>
+                    </button>
+                </div>
+            )}
+
+            <div className="overflow-y-auto flex-grow border border-gray-700 rounded-lg">
+                <table className="min-w-full divide-y divide-gray-700">
+                    <thead className="bg-gray-800 sticky top-0">
+                        <tr>
+                            <th scope="col" className="p-4">
+                                <input
+                                    ref={selectAllCheckboxRef}
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-yellow-400 focus:ring-yellow-400 accent-yellow-400"
+                                    checked={results.length > 0 && selectedForBulk.size === results.length}
+                                    onChange={handleSelectAllForBulk}
+                                />
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-yellow-400 uppercase tracking-wider">Voter Info</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-yellow-400 uppercase tracking-wider">Serial No.</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-gray-900 divide-y divide-gray-800">
+                        {results.map(record => {
+                            const nameHeader = headers.find(h => h.toLowerCase().includes('name'));
+                            const displayName = (nameHeader && record[nameHeader]) || (headers.length > 1 && record[headers[1]]) || 'N/A';
+                            return (
+                                <tr key={record.__id} className={selectedForBulk.has(record.__id) ? 'bg-yellow-900/40' : 'hover:bg-gray-700/50'}>
+                                    <td className="p-4">
+                                        <input
+                                            type="checkbox"
+                                            className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-yellow-400 focus:ring-yellow-400 accent-yellow-400"
+                                            checked={selectedForBulk.has(record.__id)}
+                                            onChange={() => handleRowSelectForBulk(record.__id)}
+                                        />
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <button onClick={() => onSelectRecord(record)} className="text-left w-full">
+                                            <p className="font-semibold text-yellow-400 hover:underline">{String(displayName)}</p>
+                                        </button>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                        {record[headers[0]] || 'N/A'}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            <Modal isOpen={isBulkUpdateOpen} onClose={() => setIsBulkUpdateOpen(false)} title={`Bulk Update ${selectedForBulk.size} Rows`}>
+                 <div className="space-y-4">
+                    <div>
+                        <label htmlFor="batch-column" className="block text-sm font-medium text-gray-300 mb-1">
+                            Column to Update
+                        </label>
+                        <select
+                            id="batch-column"
+                            value={bulkUpdateConfig.column}
+                            onChange={(e) => setBulkUpdateConfig({ ...bulkUpdateConfig, column: e.target.value })}
+                             className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                        >
+                            {headers.filter(h => h !== 'SERIAL NO IN THE VOTER LIST').map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                    </div>
+                     <div>
+                        <label htmlFor="batch-value" className="block text-sm font-medium text-gray-300 mb-1">
+                            New Value
+                        </label>
+                        <input
+                            type="text"
+                            id="batch-value"
+                            value={bulkUpdateConfig.value}
+                            onChange={(e) => setBulkUpdateConfig({ ...bulkUpdateConfig, value: e.target.value })}
+                            className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                        />
+                    </div>
+                    <div className="flex justify-end gap-4 pt-2">
+                        <button type="button" onClick={() => setIsBulkUpdateOpen(false)} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition-colors">Cancel</button>
+                        <button type="button" onClick={applyBulkUpdate} className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded transition-colors">Apply Update</button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Confirm Deletion">
+                <div className="space-y-4">
+                    <p className="text-gray-300">
+                        Are you sure you want to delete the selected {selectedForBulk.size} row{selectedForBulk.size > 1 ? 's' : ''}? This action cannot be undone.
+                    </p>
+                    <div className="flex justify-end gap-4 pt-2">
+                        <button type="button" onClick={() => setIsDeleteConfirmOpen(false)} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition-colors">Cancel</button>
+                        <button type="button" onClick={confirmBulkDelete} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded transition-colors">Confirm Delete</button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }
