@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { VoterRecord } from '../types';
 import { Modal } from './Modal';
-import { SearchIcon, HomeIcon, ChevronDownIcon, ChevronUpIcon, MicrophoneIcon, PlusIcon, TrashIcon, EditIcon } from './icons';
+import { SearchIcon, HomeIcon, ChevronDownIcon, ChevronUpIcon, MicrophoneIcon, PlusIcon, TrashIcon, EditIcon, GeminiIcon } from './icons';
 import { useGemini } from '../hooks/useGemini';
 import { GoogleGenAI, Type } from '@google/genai';
 
@@ -152,12 +152,29 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
     const [isAddVoterModalOpen, setIsAddVoterModalOpen] = useState(false);
 
     const { text: voiceSearchText, isListening: isVoiceSearching, startListening: startVoiceSearch, stopListening: stopVoiceSearch, hasRecognitionSupport } = useSpeechRecognition();
+    const ai = useGemini();
     
     useEffect(() => {
-        if (voiceSearchText) {
-            setSearchTerm(voiceSearchText);
-        }
-    }, [voiceSearchText]);
+        const processVoiceSearch = async () => {
+            if (voiceSearchText && !isVoiceSearching && ai) {
+                const prompt = `From the following voice command, extract only the main search query as a plain string. For example, from "search for John Smith" return "John Smith". From "find voters in ward 5", return "ward 5". The voice command is: "${voiceSearchText}"`;
+                try {
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-2.5-flash',
+                        contents: prompt,
+                    });
+                    const extractedTerm = response.text.trim();
+                    setSearchTerm(extractedTerm);
+                } catch (error) {
+                    console.error("Error processing voice search with Gemini:", error);
+                    setSearchTerm(voiceSearchText); // Fallback to raw transcript
+                }
+            } else if (voiceSearchText && !isVoiceSearching) {
+                 setSearchTerm(voiceSearchText); // Fallback if AI not available
+            }
+        };
+        processVoiceSearch();
+    }, [voiceSearchText, isVoiceSearching, ai]);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -400,6 +417,7 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results
     const [isBulkUpdateOpen, setIsBulkUpdateOpen] = useState(false);
     const [bulkUpdateConfig, setBulkUpdateConfig] = useState({ column: headers.filter(h => h !== 'SERIAL NO IN THE VOTER LIST')[0] ?? '', value: '' });
     const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
+    const [writtenCommand, setWrittenCommand] = useState('');
 
     useEffect(() => {
         if (selectedRecord) {
@@ -427,9 +445,15 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results
         const updates = await parseVoiceInputWithGemini(transcript, headers, ai);
         if (Object.keys(updates).length > 0) {
             setEditableRecord(prev => ({ ...prev!, ...updates }));
-            alert(`Updated fields via voice: ${Object.keys(updates).join(', ')}`);
+            alert(`Updated fields via AI: ${Object.keys(updates).join(', ')}`);
         }
     }, [ai, editableRecord, headers]);
+
+    const handleWrittenCommand = useCallback(async () => {
+        if (!writtenCommand.trim() || !ai) return;
+        await handleVoiceUpdate(writtenCommand);
+        setWrittenCommand('');
+    }, [ai, handleVoiceUpdate, writtenCommand]);
     
     useEffect(() => {
         if (voiceEditText && !isVoiceEditing) {
@@ -500,6 +524,26 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results
         return (
             <div>
                 <button onClick={() => { onSelectRecord(null); setIsEditing(false); }} className="text-yellow-400 hover:underline mb-4">&larr; Back to list</button>
+                {isEditing && (
+                    <div className="flex items-center gap-2 my-4">
+                        <input
+                            type="text"
+                            placeholder="Type command: 'change name to...'"
+                            value={writtenCommand}
+                            onChange={(e) => setWrittenCommand(e.target.value)}
+                            className="block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                        />
+                        <button
+                            type="button"
+                            onClick={handleWrittenCommand}
+                            className="bg-purple-600 hover:bg-purple-500 text-white p-2 rounded-md transition-colors"
+                            title="Parse command with AI"
+                            disabled={!ai}
+                        >
+                            <GeminiIcon className="w-6 h-6" />
+                        </button>
+                    </div>
+                )}
                 <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
                     {headers.map(header => (
                         <div key={header} className="grid grid-cols-3 gap-4 border-b border-gray-700 py-2">
@@ -671,10 +715,12 @@ const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSave
     const [newRecord, setNewRecord] = useState<Partial<VoterRecord>>({});
     const { text: voiceInputText, isListening, startListening, stopListening, hasRecognitionSupport } = useSpeechRecognition();
     const ai = useGemini();
+    const [writtenCommand, setWrittenCommand] = useState('');
 
     useEffect(() => {
         if (!isOpen) {
             setNewRecord({});
+            setWrittenCommand('');
         }
     }, [isOpen]);
 
@@ -683,9 +729,15 @@ const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSave
         const updates = await parseVoiceInputWithGemini(transcript, headers, ai);
         if (Object.keys(updates).length > 0) {
             setNewRecord(prev => ({...prev, ...updates}));
-            alert(`Added data via voice for: ${Object.keys(updates).join(', ')}`);
+            alert(`Added data via AI for: ${Object.keys(updates).join(', ')}`);
         }
     }, [ai, headers]);
+
+    const handleWrittenCommand = useCallback(async () => {
+        if (!writtenCommand.trim() || !ai) return;
+        await handleVoiceUpdate(writtenCommand);
+        setWrittenCommand('');
+    }, [ai, handleVoiceUpdate, writtenCommand]);
 
     useEffect(() => {
         if (voiceInputText && !isListening) {
@@ -703,7 +755,26 @@ const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSave
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Add New/Missing Voter">
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="flex items-center gap-2 mb-4">
+                <input
+                    type="text"
+                    placeholder="Type command: 'set name to John...'"
+                    value={writtenCommand}
+                    onChange={(e) => setWrittenCommand(e.target.value)}
+                    className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                />
+                {ai && (
+                    <button
+                        type="button"
+                        onClick={handleWrittenCommand}
+                        className="bg-purple-600 hover:bg-purple-500 text-white p-2.5 rounded-md transition-colors"
+                        title="Parse command with AI"
+                    >
+                        <GeminiIcon className="w-5 h-5" />
+                    </button>
+                )}
+            </div>
+            <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
                 {headers.map(header => (
                     <div key={header}>
                         <label className="block text-sm font-medium text-gray-300 mb-1">{header}</label>

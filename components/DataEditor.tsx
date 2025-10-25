@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import type { VoterRecord } from '../types';
 import { DataTable } from './DataTable';
 import { Modal } from './Modal';
-import { DownloadIcon, TrashIcon, CopyIcon, HighlightIcon, ResetIcon, HomeIcon, PlusIcon, EditIcon, ColumnsIcon, UndoIcon, RedoIcon, GeminiIcon } from './icons';
+import { DownloadIcon, TrashIcon, CopyIcon, HighlightIcon, ResetIcon, HomeIcon, PlusIcon, EditIcon, ColumnsIcon, UndoIcon, RedoIcon, GeminiIcon, SearchIcon } from './icons';
 import { useGemini } from '../hooks/useGemini';
 
 declare const XLSX: any;
@@ -70,6 +70,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
     const [addColumnError, setAddColumnError] = useState<string | null>(null);
     const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
     const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
+    const [columnSearchTerm, setColumnSearchTerm] = useState('');
     const [isBatchUpdateOpen, setIsBatchUpdateOpen] = useState(false);
     const [batchUpdateConfig, setBatchUpdateConfig] = useState({ column: headers.filter(h => h !== SERIAL_NUMBER_HEADER)[0] ?? '', value: '' });
     const [isDeleteConfirmModalOpen, setIsDeleteConfirmModalOpen] = useState(false);
@@ -103,7 +104,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                 model: 'gemini-2.5-pro',
                 contents: prompt,
             });
-            // FIX: Access the generated text directly from the `text` property of the response object.
+            // Access the generated text directly from the `text` property of the response object.
             setAnalysisResult(response.text);
         } catch (error) {
             console.error("Error analyzing data with Gemini:", error);
@@ -241,6 +242,11 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
         });
     };
 
+    const handleResetColumns = () => {
+        setHiddenColumns(new Set());
+        setColumnSearchTerm('');
+    };
+
     const handleBatchUpdate = () => {
         if (!batchUpdateConfig.column || selectedRows.size === 0) return;
         setState(currentState => ({
@@ -303,6 +309,10 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
         { label: 'Download Excel', icon: DownloadIcon, action: downloadExcel, disabled: false },
         { label: 'Upload New File', icon: ResetIcon, action: onReset, disabled: false },
     ], [selectedRows.size, downloadExcel, onReset, headers, data, undo, redo, canUndo, canRedo, ai]);
+
+    const filteredHeadersForManager = headers.filter(h =>
+        h.toLowerCase().includes(columnSearchTerm.toLowerCase())
+    );
 
     return (
         <div className="space-y-6">
@@ -407,28 +417,53 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                 </div>
             </Modal>
 
-            <Modal isOpen={isColumnManagerOpen} onClose={() => setIsColumnManagerOpen(false)} title="Manage Columns">
+            <Modal isOpen={isColumnManagerOpen} onClose={() => { setIsColumnManagerOpen(false); setColumnSearchTerm(''); }} title="Manage Columns">
                 <div className="space-y-3">
                     <p className="text-gray-400">Select columns to display in the table.</p>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto p-2 border border-gray-700 rounded-md">
-                        {headers.map(header => (
-                            <div key={header} className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    id={`vis-${header}`}
-                                    className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-yellow-400 focus:ring-yellow-400 accent-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    checked={!hiddenColumns.has(header)}
-                                    onChange={() => handleColumnVisibilityToggle(header)}
-                                    disabled={header === SERIAL_NUMBER_HEADER}
-                                />
-                                <label htmlFor={`vis-${header}`} className={`ml-2 text-gray-300 truncate ${header === SERIAL_NUMBER_HEADER ? 'opacity-50' : ''}`} title={header}>{header}</label>
-                            </div>
-                        ))}
+
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Search for a column..."
+                            value={columnSearchTerm}
+                            onChange={(e) => setColumnSearchTerm(e.target.value)}
+                            className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm py-2 px-3 pl-10 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                        />
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <SearchIcon className="w-5 h-5 text-gray-400" />
+                        </div>
                     </div>
-                     <div className="flex justify-end gap-4 pt-2">
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto p-2 border border-gray-700 rounded-md">
+                        {filteredHeadersForManager.length > 0 ? (
+                            filteredHeadersForManager.map(header => (
+                                <div key={header} className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        id={`vis-${header}`}
+                                        className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-yellow-400 focus:ring-yellow-400 accent-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        checked={!hiddenColumns.has(header)}
+                                        onChange={() => handleColumnVisibilityToggle(header)}
+                                        disabled={header === SERIAL_NUMBER_HEADER}
+                                    />
+                                    <label htmlFor={`vis-${header}`} className={`ml-2 text-gray-300 truncate ${header === SERIAL_NUMBER_HEADER ? 'opacity-50' : ''}`} title={header}>{header}</label>
+                                </div>
+                            ))
+                        ) : (
+                             <p className="text-gray-400 col-span-full text-center py-4">No columns found.</p>
+                        )}
+                    </div>
+                     <div className="flex justify-between items-center gap-4 pt-2">
                         <button
                             type="button"
-                            onClick={() => setIsColumnManagerOpen(false)}
+                            onClick={handleResetColumns}
+                            className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition-colors"
+                        >
+                            Reset to Default
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setIsColumnManagerOpen(false); setColumnSearchTerm(''); }}
                             className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded transition-colors"
                         >
                             Done
