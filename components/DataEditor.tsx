@@ -1,11 +1,16 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import type { VoterRecord } from '../types';
+
+
+
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import type { VoterRecord, BloInfo } from '../types';
 import { DataTable } from './DataTable';
 import { Modal } from './Modal';
-import { DownloadIcon, TrashIcon, CopyIcon, HighlightIcon, ResetIcon, HomeIcon, PlusIcon, EditIcon, ColumnsIcon, UndoIcon, RedoIcon, GeminiIcon, SearchIcon } from './icons';
+import { DownloadIcon, TrashIcon, CopyIcon, HighlightIcon, ResetIcon, HomeIcon, PlusIcon, EditIcon, ColumnsIcon, UndoIcon, RedoIcon, GeminiIcon, SearchIcon, PdfIcon, SpinnerIcon, UploadIcon } from './icons';
 import { useGemini } from '../hooks/useGemini';
+import { FileUpload } from './FileUpload';
 
 declare const XLSX: any;
+declare const jspdf: any;
 
 interface DataEditorProps {
     initialData: VoterRecord[];
@@ -13,9 +18,13 @@ interface DataEditorProps {
     onReset: () => void;
     fileName: string;
     onGoHome: () => void;
+    bloInfo: BloInfo;
+    onFileLoad: (file: File) => void;
+    isLoading: boolean;
+    error: string | null;
 }
 
-const SERIAL_NUMBER_HEADER = 'SERIAL NO IN THE VOTER LIST';
+const SERIAL_NUMBER_HEADER = 'SERIAL NO';
 
 type EditorState = {
     data: VoterRecord[];
@@ -49,6 +58,11 @@ const useHistory = (initialState: EditorState) => {
         }
     }, [currentIndex, history.length]);
 
+    const resetHistory = useCallback((newState: EditorState) => {
+        setHistory([newState]);
+        setCurrentIndex(0);
+    }, []);
+
     return {
         state: history[currentIndex],
         setState,
@@ -56,11 +70,12 @@ const useHistory = (initialState: EditorState) => {
         redo,
         canUndo: currentIndex > 0,
         canRedo: currentIndex < history.length - 1,
+        resetHistory,
     };
 };
 
-export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHeaders, onReset, fileName, onGoHome }) => {
-    const { state, setState, undo, redo, canUndo, canRedo } = useHistory({ data: initialData, headers: initialHeaders });
+export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHeaders, onReset, fileName, onGoHome, bloInfo, onFileLoad, isLoading, error }) => {
+    const { state, setState, undo, redo, canUndo, canRedo, resetHistory } = useHistory({ data: initialData, headers: initialHeaders });
     const { data, headers } = state;
     const ai = useGemini();
     
@@ -77,6 +92,50 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
     const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
     const [analysisResult, setAnalysisResult] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isDownloadingExcel, setIsDownloadingExcel] = useState(false);
+    const [isExportingPdf, setIsExportingPdf] = useState(false);
+    const [filters, setFilters] = useState<Record<string, string>>({});
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'ascending' | 'descending' } | null>(null);
+
+    useEffect(() => {
+        resetHistory({ data: initialData, headers: initialHeaders });
+    }, [initialData, initialHeaders, resetHistory]);
+
+    const processedData = useMemo(() => {
+        let processableData = [...data];
+        
+        const activeFilters = Object.entries(filters).filter(([, value]) => value);
+        if (activeFilters.length > 0) {
+            processableData = processableData.filter(row => {
+                return activeFilters.every(([header, filterValue]) => {
+                    return String(row[header] ?? '').toLowerCase().includes(String(filterValue).toLowerCase());
+                });
+            });
+        }
+
+        if (sortConfig !== null) {
+            processableData.sort((a, b) => {
+                const aVal = a[sortConfig.key];
+                const bVal = b[sortConfig.key];
+                if (aVal === null || aVal === undefined) return 1;
+                if (bVal === null || bVal === undefined) return -1;
+
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    return sortConfig.direction === 'ascending' ? aVal - bVal : bVal - aVal;
+                }
+
+                if (String(aVal).localeCompare(String(bVal), undefined, { numeric: true }) < 0) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (String(aVal).localeCompare(String(bVal), undefined, { numeric: true }) > 0) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+
+        return processableData;
+    }, [data, filters, sortConfig]);
 
     const handleAnalyzeSelection = async () => {
         if (selectedRows.size === 0 || !ai) return;
@@ -104,7 +163,6 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                 model: 'gemini-2.5-pro',
                 contents: prompt,
             });
-            // Access the generated text directly from the `text` property of the response object.
             setAnalysisResult(response.text);
         } catch (error) {
             console.error("Error analyzing data with Gemini:", error);
@@ -184,19 +242,79 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
     };
 
     const downloadExcel = useCallback(() => {
-        const dataToExport = data.map(row => {
-            const newRow: Record<string, any> = {};
-            headers.forEach(header => {
-                newRow[header] = row[header];
-            });
-            return newRow;
-        });
+        setIsDownloadingExcel(true);
+        setTimeout(() => {
+            try {
+                const dataToExport = data.map(row => {
+                    const newRow: Record<string, any> = {};
+                    headers.forEach(header => {
+                        newRow[header] = row[header];
+                    });
+                    return newRow;
+                });
 
-        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "VotersData");
-        XLSX.writeFile(workbook, fileName);
-    }, [data, headers, fileName]);
+                const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "VotersData");
+                
+                const bloInfoForSheet = Object.entries(bloInfo).map(([key, value]) => ({ 'Field': key, 'Value': value }));
+                const worksheet2 = XLSX.utils.json_to_sheet(bloInfoForSheet);
+                XLSX.utils.book_append_sheet(workbook, worksheet2, "BLO Info");
+
+                XLSX.writeFile(workbook, fileName);
+            } catch (error) {
+                console.error("Failed to generate Excel file:", error);
+                alert("An error occurred while generating the Excel file.");
+            } finally {
+                setIsDownloadingExcel(false);
+            }
+        }, 100);
+    }, [data, headers, fileName, bloInfo]);
+
+    const exportToPdf = useCallback(() => {
+        setIsExportingPdf(true);
+        setTimeout(() => { 
+            try {
+                const doc = new jspdf.jsPDF();
+                const visibleHeaders = headers.filter(h => !hiddenColumns.has(h));
+    
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(18);
+                doc.text('Voter Data Report', 14, 22);
+                doc.setFontSize(11);
+                doc.setTextColor(100);
+    
+                let startY = 32;
+                Object.entries(bloInfo).forEach(([key, value]) => {
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`${key}:`, 14, startY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(String(value), 60, startY);
+                    startY += 7;
+                });
+    
+                const tableData = processedData.map(row => 
+                    visibleHeaders.map(header => row[header] ?? '')
+                );
+    
+                doc.autoTable({
+                    head: [visibleHeaders],
+                    body: tableData,
+                    startY: startY + 5,
+                    theme: 'grid',
+                    headStyles: { fillColor: [251, 191, 36], textColor: [0, 0, 0] },
+                    styles: { fontSize: 8 },
+                });
+    
+                doc.save(`${fileName.split('.')[0]}.pdf`);
+            } catch (error) {
+                console.error("Failed to generate PDF:", error);
+                alert("An error occurred while generating the PDF. Please check the console for details.");
+            } finally {
+                setIsExportingPdf(false);
+            }
+        }, 100);
+    }, [processedData, headers, hiddenColumns, fileName, bloInfo]);
     
     const handleAddNewColumn = (e: React.FormEvent) => {
         e.preventDefault();
@@ -295,73 +413,133 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
         setState(currentState => ({ ...currentState, headers: newHeaders }));
     }, [setState]);
 
+    const handleUploadButtonClick = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = ".xlsx, .xls";
+        input.onchange = (e: any) => {
+            if (e.target.files && e.target.files.length > 0) {
+                onFileLoad(e.target.files[0]);
+            }
+        };
+        input.click();
+    };
+
     const actionButtons = useMemo(() => [
-        { label: 'Undo', icon: UndoIcon, action: undo, disabled: !canUndo },
-        { label: 'Redo', icon: RedoIcon, action: redo, disabled: !canRedo },
-        { label: 'Add Row', icon: PlusIcon, action: handleAddNewRow, disabled: false },
-        { label: 'Add Column', icon: PlusIcon, action: openAddColumnModal, disabled: false },
-        { label: 'Delete Selected', icon: TrashIcon, action: deleteSelectedRows, disabled: selectedRows.size === 0 },
-        { label: 'Duplicate Selected', icon: CopyIcon, action: duplicateSelectedRows, disabled: selectedRows.size === 0 },
-        { label: 'Highlight Selected', icon: HighlightIcon, action: highlightSelectedRows, disabled: selectedRows.size === 0 },
-        { label: 'Batch Update', icon: EditIcon, action: () => setIsBatchUpdateOpen(true), disabled: selectedRows.size === 0 },
-        { label: 'Analyze with AI', icon: GeminiIcon, action: handleAnalyzeSelection, disabled: selectedRows.size === 0 || !ai },
-        { label: 'Manage Columns', icon: ColumnsIcon, action: () => setIsColumnManagerOpen(true), disabled: false },
-        { label: 'Download Excel', icon: DownloadIcon, action: downloadExcel, disabled: false },
-        { label: 'Upload New File', icon: ResetIcon, action: onReset, disabled: false },
-    ], [selectedRows.size, downloadExcel, onReset, headers, data, undo, redo, canUndo, canRedo, ai]);
+        { label: 'Undo', icon: UndoIcon, action: undo, disabled: !canUndo, color: 'blue', tooltip: 'Undo the last action' },
+        { label: 'Redo', icon: RedoIcon, action: redo, disabled: !canRedo, color: 'blue', tooltip: 'Redo the last undone action' },
+        { label: 'Add Row', icon: PlusIcon, action: handleAddNewRow, disabled: false, color: 'green', tooltip: 'Add a new empty row to the table' },
+        { label: 'Add Column', icon: PlusIcon, action: openAddColumnModal, disabled: false, color: 'green', tooltip: 'Add a new custom column' },
+        { label: 'Delete Selected', icon: TrashIcon, action: deleteSelectedRows, disabled: selectedRows.size === 0, color: 'red', tooltip: 'Delete all selected rows' },
+        { label: 'Duplicate Selected', icon: CopyIcon, action: duplicateSelectedRows, disabled: selectedRows.size === 0, color: 'yellow', tooltip: 'Create a copy of the selected rows' },
+        { label: 'Highlight Selected', icon: HighlightIcon, action: highlightSelectedRows, disabled: selectedRows.size === 0, color: 'yellow', tooltip: 'Toggle a visual highlight on selected rows' },
+        { label: 'Batch Update', icon: EditIcon, action: () => setIsBatchUpdateOpen(true), disabled: selectedRows.size === 0, color: 'yellow', tooltip: 'Update a specific column for all selected rows at once' },
+        { label: 'Analyze with AI', icon: GeminiIcon, action: handleAnalyzeSelection, disabled: selectedRows.size === 0 || !ai, color: 'purple', tooltip: 'Get an AI-powered summary of the selected data' },
+        { label: 'Manage Columns', icon: ColumnsIcon, action: () => setIsColumnManagerOpen(true), disabled: false, color: 'gray', tooltip: 'Show or hide columns from the table view' },
+        { label: 'Download Excel', icon: DownloadIcon, action: downloadExcel, disabled: false, color: 'green', tooltip: 'Download the current data as an Excel (.xlsx) file' },
+        { label: 'Export to PDF', icon: PdfIcon, action: exportToPdf, disabled: false, color: 'purple', tooltip: 'Export the current view as a PDF document' },
+        { label: 'Reset Data', icon: ResetIcon, action: onReset, disabled: false, color: 'red', tooltip: 'Clear all data and start over with a blank sheet' },
+    ], [selectedRows.size, downloadExcel, onReset, headers, data, undo, redo, canUndo, canRedo, ai, exportToPdf]);
 
     const filteredHeadersForManager = headers.filter(h =>
         h.toLowerCase().includes(columnSearchTerm.toLowerCase())
     );
 
+    const buttonColorClasses = {
+        yellow: 'bg-yellow-900/50 text-yellow-300 border-yellow-500/50 hover:bg-yellow-500 hover:text-black',
+        red: 'bg-red-900/50 text-red-300 border-red-500/50 hover:bg-red-500 hover:text-white',
+        green: 'bg-green-900/50 text-green-300 border-green-500/50 hover:bg-green-500 hover:text-black',
+        blue: 'bg-blue-900/50 text-blue-300 border-blue-500/50 hover:bg-blue-500 hover:text-white',
+        purple: 'bg-purple-900/50 text-purple-300 border-purple-500/50 hover:bg-purple-500 hover:text-white',
+        gray: 'bg-slate-800 text-slate-300 border-slate-500/50 hover:bg-slate-600 hover:text-white',
+    };
+
+    if (data.length === 0) {
+        return (
+            <FileUpload 
+                onFileLoad={onFileLoad}
+                isLoading={isLoading}
+                error={error}
+            />
+        );
+    }
+
     return (
         <div className="space-y-6">
             <header className="flex flex-col md:flex-row items-center justify-between gap-4">
-                <h1 className="text-3xl font-bold text-yellow-400">Data Editor</h1>
+                <h1 className="text-4xl font-bold text-yellow-400 font-copperplate-gothic tracking-wider">Data Editor</h1>
                 <button
                     onClick={onGoHome}
-                    className="flex items-center gap-2 bg-gray-800 text-yellow-400 border border-yellow-500/50 px-4 py-2 rounded-md hover:bg-yellow-400 hover:text-black transition-colors duration-200"
+                    title="Return to the main menu"
+                    className="flex items-center gap-2 bg-slate-800 text-yellow-400 border border-yellow-500/50 px-4 py-2 rounded-lg hover:bg-yellow-400 hover:text-black transition-all duration-200 shadow-md hover:shadow-lg hover:shadow-yellow-400/20"
                 >
                     <HomeIcon className="w-5 h-5" />
-                    <span>Back to Home</span>
+                    <span className="font-semibold">Back to Home</span>
                 </button>
             </header>
 
-            <p className="text-sm text-gray-400 italic">Tip: Double-click a cell to edit. Right-click a column header for options. Click a header to sort.</p>
+            <p className="text-sm text-slate-300 italic">Tip: Double-click a cell to edit. Right-click a column header for options. Click a header to sort.</p>
 
-            <div className="flex flex-wrap items-center gap-2">
-                {actionButtons.map(({ label, icon: Icon, action, disabled }) => (
-                    <button
-                        key={label}
-                        onClick={action}
-                        disabled={disabled}
-                        className="flex items-center gap-2 bg-gray-800 text-yellow-400 border border-yellow-500/50 px-4 py-2 rounded-md hover:bg-yellow-400 hover:text-black transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-yellow-400/50"
+            <div className="p-4 bg-slate-800/50 border border-slate-700/50 rounded-lg">
+                <div className="flex flex-wrap items-center gap-2">
+                    {actionButtons.map(({ label, icon: Icon, action, disabled, color, tooltip }) => (
+                        <button
+                            key={label}
+                            onClick={action}
+                            disabled={disabled}
+                            title={tooltip}
+                            className={`flex items-center gap-2 border px-3 py-2 rounded-md transition-colors duration-200 disabled:bg-slate-800 disabled:border-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed ${buttonColorClasses[color as keyof typeof buttonColorClasses]}`}
+                        >
+                            <Icon className="w-5 h-5" />
+                            <span className="text-sm font-semibold">{label}</span>
+                        </button>
+                    ))}
+                     <button
+                        key="Upload & Replace"
+                        onClick={handleUploadButtonClick}
+                        disabled={isLoading}
+                        title="Upload a new Excel file to replace the current data"
+                        className="flex items-center gap-2 border px-3 py-2 rounded-md transition-colors duration-200 bg-blue-900/50 text-blue-300 border-blue-500/50 hover:bg-blue-500 hover:text-white disabled:bg-slate-800 disabled:border-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
                     >
-                        <Icon className="w-5 h-5" />
-                        <span>{label}</span>
+                        <UploadIcon className="w-5 h-5" />
+                        <span className="text-sm font-semibold">Upload & Replace</span>
                     </button>
-                ))}
+                </div>
             </div>
 
-            <DataTable 
-                data={data}
-                headers={headers}
-                onCellChange={onCellChange}
-                onColumnDelete={onColumnDelete}
-                onColumnRename={onColumnRename}
-                onColumnReorder={onColumnReorder}
-                selectedRows={selectedRows}
-                setSelectedRows={setSelectedRows}
-                hiddenColumns={hiddenColumns}
-                setHiddenColumns={setHiddenColumns}
-                readOnlyColumns={[SERIAL_NUMBER_HEADER]}
-            />
+            <div className="relative">
+                {(isDownloadingExcel || isExportingPdf) && (
+                    <div className="absolute inset-0 bg-slate-900/80 flex flex-col items-center justify-center z-20 rounded-lg">
+                        <SpinnerIcon className="w-12 h-12 text-yellow-400 animate-spin" />
+                        <p className="mt-4 text-lg text-white">
+                            {isDownloadingExcel ? 'Generating Excel file...' : 'Generating PDF file...'}
+                        </p>
+                    </div>
+                )}
+                <DataTable 
+                    data={processedData}
+                    headers={headers}
+                    onCellChange={onCellChange}
+                    onColumnDelete={onColumnDelete}
+                    onColumnRename={onColumnRename}
+                    onColumnReorder={onColumnReorder}
+                    selectedRows={selectedRows}
+                    setSelectedRows={setSelectedRows}
+                    hiddenColumns={hiddenColumns}
+                    setHiddenColumns={setHiddenColumns}
+                    readOnlyColumns={[SERIAL_NUMBER_HEADER]}
+                    filters={filters}
+                    setFilters={setFilters}
+                    sortConfig={sortConfig}
+                    setSortConfig={setSortConfig}
+                />
+            </div>
 
             <Modal isOpen={isAddColumnModalOpen} onClose={() => setIsAddColumnModalOpen(false)} title="Add New Column">
                 <form onSubmit={handleAddNewColumn}>
                     <div className="space-y-4">
                         <div>
-                            <label htmlFor="column-name" className="block text-sm font-medium text-gray-300 mb-1">
+                            <label htmlFor="column-name" className="block text-sm font-medium text-slate-300 mb-1">
                                 New Column Name
                             </label>
                             <input
@@ -369,7 +547,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                                 id="column-name"
                                 value={newColumnName}
                                 onChange={(e) => setNewColumnName(e.target.value)}
-                                className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                                className="block w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
                                 autoFocus
                             />
                         </div>
@@ -380,7 +558,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                             <button
                                 type="button"
                                 onClick={() => setIsAddColumnModalOpen(false)}
-                                className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition-colors"
+                                className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded transition-colors"
                             >
                                 Cancel
                             </button>
@@ -399,14 +577,14 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                 <div className="max-h-[60vh] overflow-y-auto pr-2">
                     {isAnalyzing ? (
                         <div className="flex items-center justify-center gap-3">
-                            <GeminiIcon className="w-8 h-8 text-yellow-400 animate-spin" />
-                            <p className="text-lg text-gray-300">Analyzing data, please wait...</p>
+                            <SpinnerIcon className="w-8 h-8 text-yellow-400 animate-spin" />
+                            <p className="text-lg text-slate-300">Analyzing data, please wait...</p>
                         </div>
                     ) : (
-                        <pre className="whitespace-pre-wrap text-gray-300 font-sans">{analysisResult}</pre>
+                        <pre className="whitespace-pre-wrap text-slate-300 font-sans">{analysisResult}</pre>
                     )}
                 </div>
-                 <div className="flex justify-end gap-4 pt-4 mt-4 border-t border-gray-700">
+                 <div className="flex justify-end gap-4 pt-4 mt-4 border-t border-slate-700">
                     <button
                         type="button"
                         onClick={() => setIsAnalysisModalOpen(false)}
@@ -419,7 +597,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
 
             <Modal isOpen={isColumnManagerOpen} onClose={() => { setIsColumnManagerOpen(false); setColumnSearchTerm(''); }} title="Manage Columns">
                 <div className="space-y-3">
-                    <p className="text-gray-400">Select columns to display in the table.</p>
+                    <p className="text-slate-300">Select columns to display in the table.</p>
 
                     <div className="relative">
                         <input
@@ -427,26 +605,26 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                             placeholder="Search for a column..."
                             value={columnSearchTerm}
                             onChange={(e) => setColumnSearchTerm(e.target.value)}
-                            className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm py-2 px-3 pl-10 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                            className="block w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 pl-10 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
                         />
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <SearchIcon className="w-5 h-5 text-gray-400" />
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto p-2 border border-gray-700 rounded-md">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto p-2 border border-slate-700 rounded-md">
                         {filteredHeadersForManager.length > 0 ? (
                             filteredHeadersForManager.map(header => (
                                 <div key={header} className="flex items-center">
                                     <input
                                         type="checkbox"
                                         id={`vis-${header}`}
-                                        className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-yellow-400 focus:ring-yellow-400 accent-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="h-4 w-4 rounded bg-slate-700 border-slate-600 text-yellow-400 focus:ring-yellow-400 accent-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
                                         checked={!hiddenColumns.has(header)}
                                         onChange={() => handleColumnVisibilityToggle(header)}
                                         disabled={header === SERIAL_NUMBER_HEADER}
                                     />
-                                    <label htmlFor={`vis-${header}`} className={`ml-2 text-gray-300 truncate ${header === SERIAL_NUMBER_HEADER ? 'opacity-50' : ''}`} title={header}>{header}</label>
+                                    <label htmlFor={`vis-${header}`} className={`ml-2 text-slate-300 truncate ${header === SERIAL_NUMBER_HEADER ? 'opacity-50' : ''}`} title={header}>{header}</label>
                                 </div>
                             ))
                         ) : (
@@ -457,7 +635,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                         <button
                             type="button"
                             onClick={handleResetColumns}
-                            className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition-colors"
+                            className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded transition-colors"
                         >
                             Reset to Default
                         </button>
@@ -475,20 +653,20 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
             <Modal isOpen={isBatchUpdateOpen} onClose={() => setIsBatchUpdateOpen(false)} title={`Batch Update ${selectedRows.size} Rows`}>
                  <div className="space-y-4">
                     <div>
-                        <label htmlFor="batch-column" className="block text-sm font-medium text-gray-300 mb-1">
+                        <label htmlFor="batch-column" className="block text-sm font-medium text-slate-300 mb-1">
                             Column to Update
                         </label>
                         <select
                             id="batch-column"
                             value={batchUpdateConfig.column}
                             onChange={(e) => setBatchUpdateConfig({ ...batchUpdateConfig, column: e.target.value })}
-                             className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                             className="block w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
                         >
                             {headers.filter(h => h !== SERIAL_NUMBER_HEADER).map(h => <option key={h} value={h}>{h}</option>)}
                         </select>
                     </div>
                      <div>
-                        <label htmlFor="batch-value" className="block text-sm font-medium text-gray-300 mb-1">
+                        <label htmlFor="batch-value" className="block text-sm font-medium text-slate-300 mb-1">
                             New Value
                         </label>
                         <input
@@ -496,14 +674,14 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                             id="batch-value"
                             value={batchUpdateConfig.value}
                             onChange={(e) => setBatchUpdateConfig({ ...batchUpdateConfig, value: e.target.value })}
-                            className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                            className="block w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
                         />
                     </div>
                     <div className="flex justify-end gap-4 pt-2">
                         <button
                             type="button"
                             onClick={() => setIsBatchUpdateOpen(false)}
-                            className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition-colors"
+                            className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded transition-colors"
                         >
                             Cancel
                         </button>
@@ -520,14 +698,14 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
 
             <Modal isOpen={isDeleteConfirmModalOpen} onClose={() => setIsDeleteConfirmModalOpen(false)} title="Confirm Deletion">
                 <div className="space-y-4">
-                    <p className="text-gray-300">
+                    <p className="text-slate-300">
                         Are you sure you want to delete the selected {selectedRows.size} row{selectedRows.size > 1 ? 's' : ''}?
                     </p>
                     <div className="flex justify-end gap-4 pt-2">
                         <button
                             type="button"
                             onClick={() => setIsDeleteConfirmModalOpen(false)}
-                            className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition-colors"
+                            className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded transition-colors"
                         >
                             Cancel
                         </button>

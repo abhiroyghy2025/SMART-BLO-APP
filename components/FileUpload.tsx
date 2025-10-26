@@ -46,9 +46,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileLoad, isLoading, e
     return (
         <div className="flex flex-col items-center justify-center min-h-[70vh]">
             <div className="w-full max-w-2xl text-center">
-                <h2 className="text-3xl font-bold text-gray-300 mb-4">Upload Excel File</h2>
-                <p className="text-gray-400 mb-8">
-                    To begin editing and searching, please upload your voter data file.
+                <h2 className="text-4xl font-bold text-gray-200 mb-4 font-copperplate-gothic tracking-wider">Upload Excel File</h2>
+                <p className="text-gray-300 mb-8 text-lg">
+                    To begin, please upload your voter data file.
                 </p>
 
                 <div
@@ -56,7 +56,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileLoad, isLoading, e
                     onDragLeave={handleDragLeave}
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
-                    className={`relative border-2 border-dashed rounded-lg p-12 transition-all duration-300 ${isDragging ? 'border-yellow-400 bg-gray-800' : 'border-gray-600'}`}
+                    className={`relative border-2 border-dashed rounded-lg p-12 transition-all duration-300 ${isDragging ? 'border-yellow-400 bg-slate-800/50 shadow-2xl shadow-yellow-400/20 scale-105' : 'border-slate-600'}`}
                 >
                     <input
                         type="file"
@@ -68,12 +68,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileLoad, isLoading, e
                     />
                     <div className="flex flex-col items-center justify-center space-y-4">
                         <UploadIcon className="w-16 h-16 text-gray-500" />
-                        <p className="text-gray-300">
-                            <label htmlFor="file-upload" className="font-semibold text-yellow-400 hover:text-yellow-300 cursor-pointer">
+                        <p className="text-gray-300 text-xl">
+                            <label htmlFor="file-upload" className="font-semibold text-yellow-400 hover:text-yellow-300 cursor-pointer transition-colors">
                                 Click to upload
                             </label> or drag and drop
                         </p>
-                        <p className="text-xs text-gray-500">XLSX or XLS files</p>
+                        <p className="text-sm text-gray-300">XLSX or XLS files only</p>
                     </div>
                 </div>
 

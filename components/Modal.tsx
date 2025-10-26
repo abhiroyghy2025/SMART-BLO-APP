@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 
 interface ModalProps {
@@ -13,16 +14,20 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
 
     return (
         <div 
-            className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity duration-300"
+            className="fixed inset-0 bg-slate-900 bg-opacity-70 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity duration-300"
             onClick={onClose}
         >
             <div
-                className="bg-gray-900 border border-yellow-500/30 rounded-lg shadow-xl w-full max-w-2xl mx-4 my-8 max-h-[90vh] flex flex-col transform transition-all duration-300"
+                className="bg-slate-800 border border-transparent rounded-lg shadow-xl w-full max-w-2xl mx-4 my-8 max-h-[90vh] flex flex-col transform transition-all duration-300"
+                style={{
+                  borderImage: 'linear-gradient(to bottom right, #fbbf24, #4338ca) 1',
+                  boxShadow: '0 0 40px rgba(251, 191, 36, 0.2)'
+                }}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex justify-between items-center p-4 border-b border-gray-700">
-                    <h2 className="text-xl font-semibold text-yellow-400">{title}</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
+                <div className="flex justify-between items-center p-4 border-b border-slate-700">
+                    <h2 className="text-2xl font-copperplate-gothic tracking-wider text-yellow-400">{title}</h2>
+                    <button onClick={onClose} className="text-gray-200 hover:text-white text-3xl leading-none">&times;</button>
                 </div>
                 <div className="p-6 overflow-y-auto">
                     {children}
