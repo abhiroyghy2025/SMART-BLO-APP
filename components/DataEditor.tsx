@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { VoterRecord, BloInfo } from '../types';
 import { DataTable } from './DataTable';
@@ -273,9 +271,9 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
 
     const exportToPdf = useCallback(() => {
         setIsExportingPdf(true);
-        setTimeout(() => { 
+        setTimeout(() => {
             try {
-                const doc = new jspdf.jsPDF();
+                const doc = new jspdf.jsPDF({ orientation: 'landscape' });
                 const visibleHeaders = headers.filter(h => !hiddenColumns.has(h));
     
                 doc.setFont('helvetica', 'bold');
@@ -302,8 +300,15 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                     body: tableData,
                     startY: startY + 5,
                     theme: 'grid',
-                    headStyles: { fillColor: [251, 191, 36], textColor: [0, 0, 0] },
-                    styles: { fontSize: 8 },
+                    headStyles: {
+                        fillColor: [255, 255, 224], // Light yellow
+                        textColor: [0, 0, 0],
+                        fontStyle: 'bold',
+                    },
+                    styles: {
+                        fontSize: 8,
+                        cellPadding: 1.5,
+                    },
                 });
     
                 doc.save(`${fileName.split('.')[0]}.pdf`);
