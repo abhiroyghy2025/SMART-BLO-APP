@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import type { BloInfo } from '../types';
 import { Header } from './Header';
+import { Adsense } from './Adsense';
 
 interface LoginScreenProps {
     onLogin: (info: BloInfo) => void;
@@ -63,6 +64,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                         Save and Continue
                     </button>
                 </form>
+            </div>
+            <div className="w-full max-w-lg mt-8">
+                <Adsense />
             </div>
         </div>
     );

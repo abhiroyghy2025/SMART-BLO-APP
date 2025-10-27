@@ -1,6 +1,7 @@
 
+
 import React, { useState, useCallback, useEffect } from 'react';
-import type { VoterRecord, BloInfo } from './types';
+import type { VoterRecord, BloInfo, AdsenseConfig, GeminiConfig } from './types';
 import { DataEditor } from './components/DataEditor';
 import { Header } from './components/Header';
 import { HomeScreen } from './components/HomeScreen';
@@ -9,6 +10,8 @@ import { LoginScreen } from './components/LoginScreen';
 import { VoterFormModal } from './components/VoterFormModal';
 import { AboutPage } from './components/AboutPage';
 import { OnboardingTour } from './components/OnboardingTour';
+import { Adsense } from './components/Adsense';
+import { SettingsModal } from './components/SettingsModal';
 
 declare const XLSX: any;
 
@@ -44,6 +47,9 @@ const App: React.FC = () => {
     const [bloInfo, setBloInfo] = useState<BloInfo | null>(null);
     const [isAddVoterModalOpen, setIsAddVoterModalOpen] = useState(false);
     const [showOnboardingTour, setShowOnboardingTour] = useState(false);
+    const [adsenseConfig, setAdsenseConfig] = useState<AdsenseConfig | null>(null);
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+    const [geminiConfig, setGeminiConfig] = useState<GeminiConfig | null>(null);
 
     useEffect(() => {
         try {
@@ -61,9 +67,21 @@ const App: React.FC = () => {
                     setShowOnboardingTour(true);
                 }
             }
+            
+            const savedAdsenseConfig = localStorage.getItem('adsenseConfig');
+            if (savedAdsenseConfig) {
+                setAdsenseConfig(JSON.parse(savedAdsenseConfig));
+            }
+
+            const savedGeminiConfig = localStorage.getItem('geminiConfig');
+            if (savedGeminiConfig) {
+                setGeminiConfig(JSON.parse(savedGeminiConfig));
+            }
         } catch (e) {
-            console.error("Failed to parse B.L.O. info from localStorage", e);
+            console.error("Failed to parse from localStorage", e);
             localStorage.removeItem('bloInfo');
+            localStorage.removeItem('adsenseConfig');
+            localStorage.removeItem('geminiConfig');
         }
     }, []);
 
@@ -207,6 +225,16 @@ const App: React.FC = () => {
         localStorage.setItem('hasCompletedOnboarding', 'true');
         setShowOnboardingTour(false);
     };
+    
+    const handleSaveAdsenseConfig = (config: AdsenseConfig) => {
+        setAdsenseConfig(config);
+        localStorage.setItem('adsenseConfig', JSON.stringify(config));
+    };
+
+    const handleSaveGeminiConfig = (config: GeminiConfig) => {
+        setGeminiConfig(config);
+        localStorage.setItem('geminiConfig', JSON.stringify(config));
+    };
 
     const renderContent = () => {
         switch(view) {
@@ -225,6 +253,7 @@ const App: React.FC = () => {
                         onGoHome={handleGoHome}
                         onDataUpdate={setData}
                         totalRecords={data.length}
+                        apiKey={geminiConfig?.apiKey}
                     />
                 );
             case 'editor':
@@ -239,6 +268,7 @@ const App: React.FC = () => {
                         onFileLoad={handleFileLoad}
                         isLoading={isLoading}
                         error={error}
+                        apiKey={geminiConfig?.apiKey}
                     />
                 );
             case 'about':
@@ -259,19 +289,31 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-transparent font-cambria">
-             <Header onGoHome={handleGoHome} />
+             <Header onGoHome={handleGoHome} onOpenSettings={() => setIsSettingsModalOpen(true)} />
             <main className="container mx-auto p-4 md:p-8">
                {renderContent()}
             </main>
+            <footer className="container mx-auto px-4 md:px-8">
+                <Adsense config={adsenseConfig} />
+            </footer>
              <VoterFormModal 
                 isOpen={isAddVoterModalOpen}
                 onClose={() => setIsAddVoterModalOpen(false)}
                 onSave={handleSaveNewVoter}
                 headers={headers.filter(h => h !== SERIAL_NUMBER_HEADER)}
+                apiKey={geminiConfig?.apiKey}
             />
             <OnboardingTour
                 isOpen={showOnboardingTour}
                 onClose={handleCompleteTour}
+            />
+            <SettingsModal
+                isOpen={isSettingsModalOpen}
+                onClose={() => setIsSettingsModalOpen(false)}
+                onSaveAdsense={handleSaveAdsenseConfig}
+                currentAdsenseConfig={adsenseConfig}
+                onSaveGemini={handleSaveGeminiConfig}
+                currentGeminiConfig={geminiConfig}
             />
         </div>
     );

@@ -13,12 +13,13 @@ interface VoterFormModalProps {
     onClose: () => void;
     onSave: (record: Partial<VoterRecord>) => void;
     headers: string[];
+    apiKey?: string;
 }
 
-export const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSave, headers }) => {
+export const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSave, headers, apiKey }) => {
     const [newRecord, setNewRecord] = useState<Partial<VoterRecord>>({});
     const { text: voiceInputText, isListening, startListening, stopListening, hasRecognitionSupport } = useSpeechRecognition();
-    const ai = useGemini();
+    const ai = useGemini(apiKey);
     const [writtenCommand, setWrittenCommand] = useState('');
 
     useEffect(() => {

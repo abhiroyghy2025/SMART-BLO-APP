@@ -12,3 +12,12 @@ export interface BloInfo {
     "NAME OF THE BLO": string;
     "CONTACT NO": string;
 }
+
+export interface AdsenseConfig {
+    publisherId: string;
+    adSlotId: string;
+}
+
+export interface GeminiConfig {
+    apiKey: string;
+}

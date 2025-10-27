@@ -20,6 +20,7 @@ interface DataEditorProps {
     onFileLoad: (file: File) => void;
     isLoading: boolean;
     error: string | null;
+    apiKey?: string;
 }
 
 const SERIAL_NUMBER_HEADER = 'SERIAL NO';
@@ -72,10 +73,10 @@ const useHistory = (initialState: EditorState) => {
     };
 };
 
-export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHeaders, onReset, fileName, onGoHome, bloInfo, onFileLoad, isLoading, error }) => {
+export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHeaders, onReset, fileName, onGoHome, bloInfo, onFileLoad, isLoading, error, apiKey }) => {
     const { state, setState, undo, redo, canUndo, canRedo, resetHistory } = useHistory({ data: initialData, headers: initialHeaders });
     const { data, headers } = state;
-    const ai = useGemini();
+    const ai = useGemini(apiKey);
     
     const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
     const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
@@ -164,7 +165,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
             setAnalysisResult(response.text);
         } catch (error) {
             console.error("Error analyzing data with Gemini:", error);
-            setAnalysisResult("An error occurred while analyzing the data. Please try again.");
+            setAnalysisResult("An error occurred while analyzing the data. Please check your API key and try again.");
         } finally {
             setIsAnalyzing(false);
         }
@@ -439,7 +440,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
         { label: 'Duplicate Selected', icon: CopyIcon, action: duplicateSelectedRows, disabled: selectedRows.size === 0, color: 'yellow', tooltip: 'Create a copy of the selected rows' },
         { label: 'Highlight Selected', icon: HighlightIcon, action: highlightSelectedRows, disabled: selectedRows.size === 0, color: 'yellow', tooltip: 'Toggle a visual highlight on selected rows' },
         { label: 'Batch Update', icon: EditIcon, action: () => setIsBatchUpdateOpen(true), disabled: selectedRows.size === 0, color: 'yellow', tooltip: 'Update a specific column for all selected rows at once' },
-        { label: 'Analyze with AI', icon: GeminiIcon, action: handleAnalyzeSelection, disabled: selectedRows.size === 0 || !ai, color: 'purple', tooltip: 'Get an AI-powered summary of the selected data' },
+        { label: 'Analyze with AI', icon: GeminiIcon, action: handleAnalyzeSelection, disabled: selectedRows.size === 0 || !ai, color: 'purple', tooltip: !ai ? 'Please set your Gemini API Key in Settings' : 'Get an AI-powered summary of the selected data' },
         { label: 'Manage Columns', icon: ColumnsIcon, action: () => setIsColumnManagerOpen(true), disabled: false, color: 'gray', tooltip: 'Show or hide columns from the table view' },
         { label: 'Download Excel', icon: DownloadIcon, action: downloadExcel, disabled: false, color: 'green', tooltip: 'Download the current data as an Excel (.xlsx) file' },
         { label: 'Export to PDF', icon: PdfIcon, action: exportToPdf, disabled: false, color: 'purple', tooltip: 'Export the current view as a PDF document' },

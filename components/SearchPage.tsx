@@ -15,9 +15,10 @@ interface SearchPageProps {
     onGoHome: () => void;
     onDataUpdate: (data: VoterRecord[]) => void;
     totalRecords: number;
+    apiKey?: string;
 }
 
-export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome, onDataUpdate, totalRecords }) => {
+export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome, onDataUpdate, totalRecords, apiKey }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<VoterRecord[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -26,7 +27,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
     const [showColumnSelector, setShowColumnSelector] = useState<boolean>(false);
 
     const { text: voiceSearchText, isListening: isVoiceSearching, startListening: startVoiceSearch, stopListening: stopVoiceSearch, hasRecognitionSupport } = useSpeechRecognition();
-    const ai = useGemini();
+    const ai = useGemini(apiKey);
     
     useEffect(() => {
         const processVoiceSearch = async () => {
@@ -161,7 +162,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
                                 type="button"
                                 onClick={isVoiceSearching ? stopVoiceSearch : startVoiceSearch}
                                 className={`absolute inset-y-0 right-0 pr-4 sm:pr-5 flex items-center focus:outline-none ${isVoiceSearching ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-white'}`}
-                                title={isVoiceSearching ? 'Stop listening' : 'Search with voice'}
+                                title={isVoiceSearching ? 'Stop listening' : !ai ? 'Please set your Gemini API Key in Settings' : 'Search with voice'}
+                                disabled={!ai}
                             >
                                 <MicrophoneIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                             </button>
@@ -225,6 +227,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
                     selectedRecord={selectedRecord}
                     onSelectRecord={setSelectedRecord}
                     onBulkDataChange={handleBulkDataChange}
+                    apiKey={apiKey}
                 />
             </Modal>
         </div>
@@ -239,13 +242,14 @@ interface SearchResultContentProps {
     selectedRecord: VoterRecord | null;
     onSelectRecord: (record: VoterRecord | null) => void;
     onBulkDataChange: (data: VoterRecord[]) => void;
+    apiKey?: string;
 }
 
-const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results, headers, selectedRecord, onSelectRecord, onBulkDataChange }) => {
+const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results, headers, selectedRecord, onSelectRecord, onBulkDataChange, apiKey }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editableRecord, setEditableRecord] = useState<VoterRecord | null>(null);
     const { text: voiceEditText, isListening: isVoiceEditing, startListening: startVoiceEdit, stopListening: stopVoiceEdit, hasRecognitionSupport } = useSpeechRecognition();
-    const ai = useGemini();
+    const ai = useGemini(apiKey);
     
     const [selectedForBulk, setSelectedForBulk] = useState<Set<string>>(new Set());
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -440,6 +444,7 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results
                             onClick={isVoiceEditing ? stopVoiceEdit : startVoiceEdit}
                             className={`p-2 rounded-full transition-colors ${isVoiceEditing ? 'bg-red-500 animate-pulse' : 'bg-blue-500 hover:bg-blue-400'} text-white`}
                             title={isVoiceEditing ? 'Stop listening' : 'Update fields with your voice'}
+                            disabled={!ai}
                         >
                             <MicrophoneIcon className="w-6 h-6" />
                         </button>
