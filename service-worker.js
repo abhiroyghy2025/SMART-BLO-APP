@@ -1,9 +1,10 @@
 
 
-const CACHE_NAME = 'smart-blo-cache-v1';
+const CACHE_NAME = 'smart-blo-cache-v2';
 const URLS_TO_CACHE = [
     '/',
     '/index.html',
+    '/manifest.json',
     '/index.tsx',
     '/App.tsx',
     '/types.ts',
@@ -29,11 +30,10 @@ const URLS_TO_CACHE = [
     '/utils/auth.ts',
     '/icon.svg',
     'https://cdn.tailwindcss.com',
-    'https://unpkg.com/react@18/umd/react.production.min.js',
-    'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-    'https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Dancing+Script:wght@700&family=Lora:wght@400&display=swap',
-    'https://aistudiocdn.com/@google/genai@^0.14.0'
+    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
+    'https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Lora:wght@400&family=Teko:wght@400&display=swap'
 ];
 
 self.addEventListener('install', (event) => {
@@ -51,20 +51,28 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+    // Use a stale-while-revalidate strategy
     event.respondWith(
-        caches.match(event.request)
-            .then((response) => {
-                if (response) {
-                    return response;
-                }
-                return fetch(event.request).then(
-                    (networkResponse) => {
-                        // Optional: Cache new requests on the fly
-                        // Be careful with this, especially with API calls
-                        return networkResponse;
+        caches.open(CACHE_NAME).then((cache) => {
+            return cache.match(event.request).then((response) => {
+                const fetchPromise = fetch(event.request).then((networkResponse) => {
+                    // Check if we received a valid response.
+                    // We don't cache chrome-extension:// requests.
+                    if (networkResponse && networkResponse.status === 200 && !event.request.url.startsWith('chrome-extension://')) {
+                        cache.put(event.request, networkResponse.clone());
                     }
-                );
-            })
+                    return networkResponse;
+                }).catch(error => {
+                    console.error('Fetch failed:', error);
+                    // If network fails and there's no cache, the request will fail.
+                    // A custom offline page could be returned here if it were cached.
+                    throw error;
+                });
+
+                // Return the cached response if it exists, otherwise wait for the network.
+                return response || fetchPromise;
+            });
+        })
     );
 });
 

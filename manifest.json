@@ -1,16 +1,18 @@
 {
-  "short_name": "SMART BLO",
-  "name": "SMART BLO",
-  "description": "An app for voters' data management.",
+  "short_name": "Smart B.L.O.",
+  "name": "Smart B.L.O. - Voter Data Management",
+  "description": "An advanced, in-browser tool to search, edit, and manage voter data from Excel files. Features include advanced search, a full-featured data editor, AI-powered voice entry, and offline capabilities.",
   "icons": [
     {
       "src": "/icon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
+  "scope": "/",
   "theme_color": "#fbbf24",
-  "background_color": "#000000"
+  "background_color": "#0f172a"
 }
