@@ -23,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, curren
                 >
                     <HomeIcon className="w-8 h-8" />
                 </button>
-                 {onOpenSettings && (
+                 {onOpenSettings && currentUser?.isAdmin && (
                      <button
                         onClick={onOpenSettings}
                         title="App Settings"
