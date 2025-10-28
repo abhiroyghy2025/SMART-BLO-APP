@@ -22,8 +22,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoHome }) => {
         {
             icon: EmailIcon,
             label: "E-mail",
-            value: "abhiroy.ghy@gmail.com",
-            href: "mailto:abhiroy.ghy@gmail.com",
+            value: "smartbloapp2025@gmail.com",
+            href: "mailto:smartbloapp2025@gmail.com",
         },
         {
             icon: GlobeIcon,
