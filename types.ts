@@ -21,3 +21,14 @@ export interface AdsenseConfig {
 export interface GeminiConfig {
     apiKey: string;
 }
+
+export interface User {
+    id: string;
+    name: string;
+    emailOrPhone: string;
+    passwordHash: string; // In a real app, this would be a securely generated hash.
+    isAdmin: boolean;
+    bloInfo: BloInfo;
+    voterData: VoterRecord[];
+    headers: string[];
+}

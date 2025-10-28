@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { VoterRecord, BloInfo } from '../types';
 import { DataTable } from './DataTable';
@@ -20,6 +21,7 @@ interface DataEditorProps {
     onFileLoad: (file: File) => void;
     isLoading: boolean;
     error: string | null;
+    onSave: (data: VoterRecord[], headers: string[]) => void;
     apiKey?: string;
 }
 
@@ -30,9 +32,29 @@ type EditorState = {
     headers: string[];
 };
 
-const useHistory = (initialState: EditorState) => {
+const useHistory = (initialState: EditorState, onSave: (state: EditorState) => void) => {
     const [history, setHistory] = useState<EditorState[]>([initialState]);
     const [currentIndex, setCurrentIndex] = useState(0);
+    const isInitialMount = React.useRef(true);
+
+    const currentState = history[currentIndex];
+
+    useEffect(() => {
+        // Reset history when initial props change
+        setHistory([initialState]);
+        setCurrentIndex(0);
+        isInitialMount.current = true;
+    }, [initialState.data, initialState.headers]);
+
+    useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+        if (currentState) {
+            onSave(currentState);
+        }
+    }, [currentState, onSave]);
 
     const setState = useCallback((value: EditorState | ((prevState: EditorState) => EditorState)) => {
         const newState = typeof value === 'function' ? (value as (prevState: EditorState) => EditorState)(history[currentIndex]) : value;
@@ -56,25 +78,24 @@ const useHistory = (initialState: EditorState) => {
             setCurrentIndex(currentIndex + 1);
         }
     }, [currentIndex, history.length]);
-
-    const resetHistory = useCallback((newState: EditorState) => {
-        setHistory([newState]);
-        setCurrentIndex(0);
-    }, []);
-
+    
     return {
-        state: history[currentIndex],
+        state: currentState,
         setState,
         undo,
         redo,
         canUndo: currentIndex > 0,
         canRedo: currentIndex < history.length - 1,
-        resetHistory,
     };
 };
 
-export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHeaders, onReset, fileName, onGoHome, bloInfo, onFileLoad, isLoading, error, apiKey }) => {
-    const { state, setState, undo, redo, canUndo, canRedo, resetHistory } = useHistory({ data: initialData, headers: initialHeaders });
+export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHeaders, onReset, fileName, onGoHome, bloInfo, onFileLoad, isLoading, error, onSave, apiKey }) => {
+    
+    const handleSave = useCallback((state: EditorState) => {
+        onSave(state.data, state.headers);
+    }, [onSave]);
+    
+    const { state, setState, undo, redo, canUndo, canRedo } = useHistory({ data: initialData, headers: initialHeaders }, handleSave);
     const { data, headers } = state;
     const ai = useGemini(apiKey);
     
@@ -95,10 +116,6 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const [filters, setFilters] = useState<Record<string, string>>({});
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'ascending' | 'descending' } | null>(null);
-
-    useEffect(() => {
-        resetHistory({ data: initialData, headers: initialHeaders });
-    }, [initialData, initialHeaders, resetHistory]);
 
     const processedData = useMemo(() => {
         let processableData = [...data];

@@ -227,6 +227,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
                     selectedRecord={selectedRecord}
                     onSelectRecord={setSelectedRecord}
                     onBulkDataChange={handleBulkDataChange}
+                    onUpdateRecord={handleUpdateRecord}
                     apiKey={apiKey}
                 />
             </Modal>
@@ -242,10 +243,11 @@ interface SearchResultContentProps {
     selectedRecord: VoterRecord | null;
     onSelectRecord: (record: VoterRecord | null) => void;
     onBulkDataChange: (data: VoterRecord[]) => void;
+    onUpdateRecord: (record: VoterRecord) => void;
     apiKey?: string;
 }
 
-const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results, headers, selectedRecord, onSelectRecord, onBulkDataChange, apiKey }) => {
+const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results, headers, selectedRecord, onSelectRecord, onBulkDataChange, onUpdateRecord, apiKey }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editableRecord, setEditableRecord] = useState<VoterRecord | null>(null);
     const { text: voiceEditText, isListening: isVoiceEditing, startListening: startVoiceEdit, stopListening: stopVoiceEdit, hasRecognitionSupport } = useSpeechRecognition();
@@ -308,8 +310,7 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results
     
     const handleSave = () => {
         if(editableRecord) {
-            const newData = data.map(row => row.__id === editableRecord.__id ? editableRecord : row);
-            onBulkDataChange(newData); // Use onBulkDataChange to update main data source
+            onUpdateRecord(editableRecord);
             setIsEditing(false);
         }
     }

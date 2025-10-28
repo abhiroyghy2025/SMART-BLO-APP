@@ -1,7 +1,7 @@
 
 
 import React from 'react';
-import { HomeIcon, EmailIcon, FacebookIcon, InstagramIcon } from './icons';
+import { HomeIcon, EmailIcon, FacebookIcon, InstagramIcon, GlobeIcon } from './icons';
 
 interface AboutPageProps {
     onGoHome: () => void;
@@ -24,6 +24,12 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoHome }) => {
             label: "E-mail",
             value: "abhiroy.ghy@gmail.com",
             href: "mailto:abhiroy.ghy@gmail.com",
+        },
+        {
+            icon: GlobeIcon,
+            label: "Official Blog",
+            value: "smartbloapp.blogspot.com",
+            href: "https://smartbloapp.blogspot.com",
         },
         {
             icon: FacebookIcon,
