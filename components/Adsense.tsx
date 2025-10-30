@@ -1,81 +1,47 @@
 import React, { useEffect } from 'react';
-import type { AdsenseConfig } from '../types';
 
+// FIX: Declare the third-party global variable to avoid TypeScript errors.
 declare global {
     interface Window {
-        adsbygoogle: any;
+        atAsyncOptions?: {
+            onAsyncAdLoaded: (element: HTMLElement | null) => void;
+        };
     }
 }
 
-interface AdsenseProps {
-    config: AdsenseConfig | null;
-}
+const SCRIPT_SRC = '//pl27957115.effectivegatecpm.com/3b12c4fb84b37d8f2ae3d75accaf9e0a/invoke.js';
+const CONTAINER_ID = 'container-3b12c4fb84b37d8f2ae3d75accaf9e0a';
 
-const ADSENSE_SCRIPT_ID = 'adsense-script';
-
-export const Adsense: React.FC<AdsenseProps> = ({ config }) => {
-    const publisherId = config?.publisherId;
-    const adSlotId = config?.adSlotId;
-    
-    const isValidConfig = publisherId && publisherId.startsWith('ca-pub-') && adSlotId;
-
+export const Adsense: React.FC = () => {
     useEffect(() => {
-        if (!isValidConfig) return;
-        
-        // Check if script already exists
-        if (document.getElementById(ADSENSE_SCRIPT_ID)) {
+        // Check if a script with this source already exists
+        if (document.head.querySelector(`script[src="${SCRIPT_SRC}"]`)) {
+            // If it exists, try to force a refresh if the container is empty.
+            // This can sometimes help if the ad failed to load on a previous page view.
+            if (window.atAsyncOptions) {
+                try {
+                    window.atAsyncOptions.onAsyncAdLoaded(document.getElementById(CONTAINER_ID));
+                } catch (e) {
+                    console.error("Ad refresh failed", e);
+                }
+            }
             return;
         }
 
         const script = document.createElement('script');
-        script.id = ADSENSE_SCRIPT_ID;
-        script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${publisherId}`;
         script.async = true;
-        script.crossOrigin = 'anonymous';
+        script.dataset.cfasync = 'false';
+        script.src = SCRIPT_SRC;
+
         document.head.appendChild(script);
 
-    }, [publisherId, isValidConfig]);
-
-    useEffect(() => {
-        if (!isValidConfig) return;
-        try {
-            (window.adsbygoogle = window.adsbygoogle || []).push({});
-        } catch (e) {
-            console.error('Could not push AdSense ad:', e);
-        }
-    }, [isValidConfig, adSlotId, publisherId]); // Rerun when config changes to push a new ad
-
-    if (!isValidConfig) {
-        return (
-             <div style={{
-                background: '#1e293b',
-                color: '#cbd5e1',
-                padding: '20px',
-                textAlign: 'center',
-                border: '1px dashed #475569',
-                borderRadius: '8px',
-                margin: '20px 0',
-                minHeight: '90px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontFamily: 'sans-serif',
-            }}>
-                <p className="font-bold">Advertisement Placeholder</p>
-                <p className="text-sm mt-2">To display ads, please configure your AdSense ID in the Settings menu.</p>
-            </div>
-        );
-    }
+    }, []);
 
     return (
-        <div className="adsense-container" style={{ margin: '20px auto', maxWidth: '970px', minHeight: '90px' }}>
-            <ins className="adsbygoogle"
-                 style={{ display: 'block', textAlign: 'center' }}
-                 data-ad-client={publisherId}
-                 data-ad-slot={adSlotId}
-                 data-ad-format="auto"
-                 data-full-width-responsive="true"></ins>
-        </div>
+        <footer className="fixed bottom-0 left-0 right-0 z-30 bg-slate-900 border-t border-slate-700">
+            <div id={CONTAINER_ID} className="h-12 overflow-hidden flex justify-center items-center">
+                {/* The ad script will populate this div */}
+            </div>
+        </footer>
     );
 };

@@ -100,7 +100,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     const bloFields: (keyof BloInfo)[] = [ "LAC NO & NAME", "PART NO & NAME" ];
 
     return (
-        <div className="min-h-screen bg-transparent flex flex-col items-center justify-center p-4">
+        <div className="bg-transparent flex flex-col items-center justify-center p-4">
             <Header onGoHome={() => {}} currentUser={null} onLogout={() => {}} onNavigate={() => {}} />
             <div className="w-full max-w-md bg-slate-800/50 border border-yellow-500/30 rounded-lg shadow-2xl shadow-yellow-400/10 p-8 space-y-6 mt-8 backdrop-blur-sm">
                 <h2 className="text-3xl font-bold text-yellow-400 text-center font-copperplate-gothic tracking-wider">
@@ -132,9 +132,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                         {isSignUp ? 'Log In' : 'Sign Up'}
                     </button>
                 </p>
-            </div>
-            <div className="w-full max-w-lg mt-8">
-                <Adsense config={null} />
             </div>
         </div>
     );
