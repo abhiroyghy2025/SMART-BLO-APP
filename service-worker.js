@@ -20,7 +20,6 @@ const URLS_TO_CACHE = [
     '/components/LoginScreen.tsx',
     '/components/VoterFormModal.tsx',
     '/components/AboutPage.tsx',
-    '/components/OnboardingTour.tsx',
     '/components/Adsense.tsx',
     '/components/SettingsModal.tsx',
     '/components/AdminDashboard.tsx',

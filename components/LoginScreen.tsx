@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import type { BloInfo } from '../types';
 import { Header } from './Header';
-import { Adsense } from './Adsense';
 import { signUp, login } from '../utils/auth';
 
 interface LoginScreenProps {

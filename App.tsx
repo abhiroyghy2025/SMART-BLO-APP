@@ -9,7 +9,6 @@ import { SearchPage } from './components/SearchPage';
 import { LoginScreen } from './components/LoginScreen';
 import { VoterFormModal } from './components/VoterFormModal';
 import { AboutPage } from './components/AboutPage';
-import { OnboardingTour } from './components/OnboardingTour';
 import { Adsense } from './components/Adsense';
 import { SettingsModal } from './components/SettingsModal';
 import { AdminDashboard } from './components/AdminDashboard';
@@ -35,7 +34,6 @@ const App: React.FC = () => {
     const [view, setView] = useState<AppView>('home');
     const [fileName, setFileName] = useState<string>('VoterData.xlsx');
     const [isAddVoterModalOpen, setIsAddVoterModalOpen] = useState(false);
-    const [showOnboardingTour, setShowOnboardingTour] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [geminiConfig, setGeminiConfig] = useState<GeminiConfig | null>(null);
 
@@ -44,12 +42,6 @@ const App: React.FC = () => {
         const user = getCurrentUser();
         if (user) {
             setCurrentUser(user);
-        }
-
-        // Check if the onboarding tour has been completed
-        const hasCompletedTour = localStorage.getItem('hasCompletedOnboarding');
-        if (!hasCompletedTour && !user) { // Show tour only if not logged in and not completed
-            setShowOnboardingTour(true);
         }
         
         // Load saved configs
@@ -165,11 +157,6 @@ const App: React.FC = () => {
         alert('New voter added successfully!');
     };
     
-    const handleCompleteTour = () => {
-        localStorage.setItem('hasCompletedOnboarding', 'true');
-        setShowOnboardingTour(false);
-    };
-
     const handleSaveGeminiConfig = (config: GeminiConfig) => {
         setGeminiConfig(config);
         localStorage.setItem('geminiConfig', JSON.stringify(config));
@@ -198,7 +185,7 @@ const App: React.FC = () => {
     }
     
     return (
-        <div className="min-h-screen bg-transparent font-cambria pb-12">
+        <div className="min-h-screen bg-transparent font-cambria pb-64 md:pb-80">
             {!currentUser ? (
                 <LoginScreen onLoginSuccess={handleLoginSuccess} />
              ) : (
@@ -222,11 +209,6 @@ const App: React.FC = () => {
                     />
                 </>
              )}
-            
-            <OnboardingTour
-                isOpen={showOnboardingTour}
-                onClose={handleCompleteTour}
-            />
 
             <Adsense />
         </div>
