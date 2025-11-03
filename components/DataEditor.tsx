@@ -1,6 +1,6 @@
 
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { VoterRecord, BloInfo } from '../types';
 import { DataTable } from './DataTable';
 import { Modal } from './Modal';
@@ -35,7 +35,10 @@ type EditorState = {
 const useHistory = (initialState: EditorState, onSave: (state: EditorState) => void) => {
     const [history, setHistory] = useState<EditorState[]>([initialState]);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const isInitialMount = React.useRef(true);
+    const isInitialMount = useRef(true);
+
+    const onSaveRef = useRef(onSave);
+    onSaveRef.current = onSave;
 
     const currentState = history[currentIndex];
 
@@ -52,9 +55,9 @@ const useHistory = (initialState: EditorState, onSave: (state: EditorState) => v
             return;
         }
         if (currentState) {
-            onSave(currentState);
+            onSaveRef.current(currentState);
         }
-    }, [currentState, onSave]);
+    }, [currentState]);
 
     const setState = useCallback((value: EditorState | ((prevState: EditorState) => EditorState)) => {
         const newState = typeof value === 'function' ? (value as (prevState: EditorState) => EditorState)(history[currentIndex]) : value;
