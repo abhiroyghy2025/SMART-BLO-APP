@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- 
+  SMART B.L.O. BLOGGER INTEGRATION WIDGET
+  
+  1. Replace "YOUR_DEPLOYED_APP_URL" below with the URL where you hosted this React app.
+  2. Copy the content inside CDATA to a Blogger HTML/JS Gadget, OR copy this entire XML block into your Blogger Theme.
+-->
+<b:widget id='HTML101' locked='false' title='Smart B.L.O. App' type='HTML' version='2' visible='true'>
+  <b:widget-settings>
+    <b:widget-setting name='content'>
+      <![CDATA[
+        <div id="smart-blo-wrapper" style="width: 100%; min-height: 600px; height: 100vh; overflow: hidden; background-color: #0f172a;">
+            <iframe 
+                id="smart-blo-frame"
+                src="YOUR_DEPLOYED_APP_URL" 
+                style="width: 100%; height: 100%; border: none;"
+                allow="microphone; camera; clipboard-read; clipboard-write; geolocation"
+                frameborder="0"
+                title="Smart B.L.O. Interface">
+            </iframe>
+        </div>
+      ]]>
+    </b:widget-setting>
+  </b:widget-settings>
+  <b:includable id='main'>
+    <data:content/>
+  </b:includable>
+</b:widget>

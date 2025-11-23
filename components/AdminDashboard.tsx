@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import type { User, BloInfo } from '../types';
-import { HomeIcon, EditIcon, TrashIcon } from './icons';
+import { HomeIcon, SpinnerIcon } from './icons';
 import { Modal } from './Modal';
 import { getAllUsers, updateUserByAdmin, resetPasswordByAdmin, deleteUserByAdmin } from '../utils/auth';
 
@@ -14,11 +15,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onGoHome }) => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isResetPassModalOpen, setIsResetPassModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [newPassword, setNewPassword] = useState('');
     const [editableUser, setEditableUser] = useState<User | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
     
-    const fetchUsers = useCallback(() => {
-        setUsers(getAllUsers());
+    const fetchUsers = useCallback(async () => {
+        setIsLoading(true);
+        const fetchedUsers = await getAllUsers();
+        setUsers(fetchedUsers);
+        setIsLoading(false);
     }, []);
 
     useEffect(() => {
@@ -33,7 +37,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onGoHome }) => {
     
     const openResetPassModal = (user: User) => {
         setSelectedUser(user);
-        setNewPassword('');
         setIsResetPassModalOpen(true);
     };
 
@@ -42,9 +45,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onGoHome }) => {
         setIsDeleteModalOpen(true);
     };
 
-    const handleUserUpdate = () => {
+    const handleUserUpdate = async () => {
         if (!editableUser) return;
-        const success = updateUserByAdmin(editableUser.id, { name: editableUser.name, bloInfo: editableUser.bloInfo });
+        const success = await updateUserByAdmin(editableUser.id, { name: editableUser.name, bloInfo: editableUser.bloInfo });
         if (success) {
             alert('User updated successfully.');
             fetchUsers();
@@ -54,24 +57,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onGoHome }) => {
         }
     };
     
-    const handlePasswordReset = () => {
-        if (!selectedUser || !newPassword.trim()) {
-            alert('Password cannot be empty.');
-            return;
-        }
-        const success = resetPasswordByAdmin(selectedUser.id, newPassword);
+    const handlePasswordReset = async () => {
+        if (!selectedUser) return;
+        const success = await resetPasswordByAdmin(selectedUser.emailOrPhone);
         if (success) {
-            alert('Password reset successfully.');
-            fetchUsers();
+            alert(`Password for ${selectedUser.emailOrPhone} has been reset to "123456".`);
             setIsResetPassModalOpen(false);
         } else {
             alert('Failed to reset password.');
         }
     };
 
-    const handleUserDelete = () => {
+    const handleUserDelete = async () => {
         if (!selectedUser) return;
-        const success = deleteUserByAdmin(selectedUser.id);
+        const success = await deleteUserByAdmin(selectedUser.id);
         if (success) {
             alert('User deleted successfully.');
             fetchUsers();
@@ -107,32 +106,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onGoHome }) => {
                 </button>
             </header>
 
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
-                <table className="min-w-full divide-y divide-slate-700">
-                    <thead className="bg-slate-900/50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-yellow-400 uppercase tracking-wider">Name</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-yellow-400 uppercase tracking-wider">Email / Phone</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-yellow-400 uppercase tracking-wider">Is Admin</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-yellow-400 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-slate-800/80 divide-y divide-slate-800">
-                        {users.map(user => (
-                            <tr key={user.id}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-200">{user.name}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{user.emailOrPhone}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{user.isAdmin ? 'Yes' : 'No'}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                                    <button onClick={() => openEditModal(user)} className="text-blue-400 hover:text-blue-300" title="Edit User">Edit</button>
-                                    <button onClick={() => openResetPassModal(user)} className="text-yellow-400 hover:text-yellow-300" title="Reset Password">Reset Pass</button>
-                                    {!user.isAdmin && <button onClick={() => openDeleteModal(user)} className="text-red-400 hover:text-red-300" title="Delete User">Delete</button>}
-                                </td>
+            {isLoading ? (
+                <div className="flex justify-center p-12">
+                    <SpinnerIcon className="w-10 h-10 text-yellow-400 animate-spin" />
+                </div>
+            ) : (
+                <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
+                    <table className="min-w-full divide-y divide-slate-700">
+                        <thead className="bg-slate-900/50">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-yellow-400 uppercase tracking-wider">Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-yellow-400 uppercase tracking-wider">Email</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-yellow-400 uppercase tracking-wider">Is Admin</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-yellow-400 uppercase tracking-wider">Actions</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody className="bg-slate-800/80 divide-y divide-slate-800">
+                            {users.map(user => (
+                                <tr key={user.id}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-200">{user.name}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{user.emailOrPhone}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{user.isAdmin ? 'Yes' : 'No'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                                        <button onClick={() => openEditModal(user)} className="text-blue-400 hover:text-blue-300" title="Edit User">Edit</button>
+                                        <button onClick={() => openResetPassModal(user)} className="text-yellow-400 hover:text-yellow-300" title="Reset Password">Reset Pass</button>
+                                        {!user.isAdmin && <button onClick={() => openDeleteModal(user)} className="text-red-400 hover:text-red-300" title="Delete User">Delete</button>}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
 
             {/* Edit User Modal */}
             <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={`Edit User: ${selectedUser?.name}`}>
@@ -153,10 +158,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onGoHome }) => {
             {/* Reset Password Modal */}
             <Modal isOpen={isResetPassModalOpen} onClose={() => setIsResetPassModalOpen(false)} title={`Reset Password for ${selectedUser?.name}`}>
                 <div className="space-y-4">
-                    <InputField label="New Password" type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                    <p className="text-slate-300">
+                        Are you sure you want to reset the password for <strong>{selectedUser?.emailOrPhone}</strong>?
+                        <br/><br/>
+                        The password will be reset to default: <code className="text-yellow-400">123456</code>.
+                    </p>
                     <div className="flex justify-end gap-4 pt-2">
                         <button onClick={() => setIsResetPassModalOpen(false)} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded">Cancel</button>
-                        <button onClick={handlePasswordReset} className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded">Set Password</button>
+                        <button onClick={handlePasswordReset} className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded">Confirm Reset</button>
                     </div>
                 </div>
             </Modal>
@@ -164,7 +173,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onGoHome }) => {
             {/* Delete User Modal */}
             <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title={`Delete User: ${selectedUser?.name}`}>
                 <div className="space-y-4">
-                    <p className="text-slate-300">Are you sure you want to permanently delete this user and all their data? This action cannot be undone.</p>
+                    <p className="text-slate-300">Are you sure you want to delete this user? This action cannot be undone.</p>
                     <div className="flex justify-end gap-4 pt-2">
                         <button onClick={() => setIsDeleteModalOpen(false)} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded">Cancel</button>
                         <button onClick={handleUserDelete} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded">Confirm Delete</button>

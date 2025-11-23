@@ -7,7 +7,6 @@ import { useGemini } from '../hooks/useGemini';
 import { GoogleGenAI } from '@google/genai';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { parseVoiceInputWithGemini } from '../utils/geminiParser';
-import { VoterFormModal } from './VoterFormModal';
 
 interface SearchPageProps {
     data: VoterRecord[];
@@ -15,10 +14,9 @@ interface SearchPageProps {
     onGoHome: () => void;
     onDataUpdate: (data: VoterRecord[]) => void;
     totalRecords: number;
-    apiKey?: string;
 }
 
-export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome, onDataUpdate, totalRecords, apiKey }) => {
+export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome, onDataUpdate, totalRecords }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<VoterRecord[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,7 +25,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
     const [showColumnSelector, setShowColumnSelector] = useState<boolean>(false);
 
     const { text: voiceSearchText, isListening: isVoiceSearching, startListening: startVoiceSearch, stopListening: stopVoiceSearch, hasRecognitionSupport } = useSpeechRecognition();
-    const ai = useGemini(apiKey);
+    const ai = useGemini();
     
     useEffect(() => {
         const processVoiceSearch = async () => {
@@ -162,7 +160,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
                                 type="button"
                                 onClick={isVoiceSearching ? stopVoiceSearch : startVoiceSearch}
                                 className={`absolute inset-y-0 right-0 pr-4 sm:pr-5 flex items-center focus:outline-none ${isVoiceSearching ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-white'}`}
-                                title={isVoiceSearching ? 'Stop listening' : !ai ? 'Please set your Gemini API Key in Settings' : 'Search with voice'}
+                                title={isVoiceSearching ? 'Stop listening' : !ai ? 'Gemini API Key missing' : 'Search with voice'}
                                 disabled={!ai}
                             >
                                 <MicrophoneIcon className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -228,7 +226,6 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
                     onSelectRecord={setSelectedRecord}
                     onBulkDataChange={handleBulkDataChange}
                     onUpdateRecord={handleUpdateRecord}
-                    apiKey={apiKey}
                 />
             </Modal>
         </div>
@@ -244,14 +241,13 @@ interface SearchResultContentProps {
     onSelectRecord: (record: VoterRecord | null) => void;
     onBulkDataChange: (data: VoterRecord[]) => void;
     onUpdateRecord: (record: VoterRecord) => void;
-    apiKey?: string;
 }
 
-const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results, headers, selectedRecord, onSelectRecord, onBulkDataChange, onUpdateRecord, apiKey }) => {
+const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results, headers, selectedRecord, onSelectRecord, onBulkDataChange, onUpdateRecord }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editableRecord, setEditableRecord] = useState<VoterRecord | null>(null);
     const { text: voiceEditText, isListening: isVoiceEditing, startListening: startVoiceEdit, stopListening: stopVoiceEdit, hasRecognitionSupport } = useSpeechRecognition();
-    const ai = useGemini(apiKey);
+    const ai = useGemini();
     
     const [selectedForBulk, setSelectedForBulk] = useState<Set<string>>(new Set());
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -575,4 +571,4 @@ const SearchResultContent: React.FC<SearchResultContentProps> = ({ data, results
             </Modal>
         </div>
     );
-}
+};

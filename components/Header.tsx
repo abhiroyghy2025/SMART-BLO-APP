@@ -1,16 +1,16 @@
+
 import React from 'react';
-import { SettingsIcon, HomeIcon } from './icons';
+import { HomeIcon } from './icons';
 import type { User } from '../types';
 
 interface HeaderProps {
     onGoHome: () => void;
-    onOpenSettings?: () => void;
     currentUser: User | null;
     onLogout: () => void;
     onNavigate: (view: 'admin' | 'home') => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, currentUser, onLogout, onNavigate }) => {
+export const Header: React.FC<HeaderProps> = ({ onGoHome, currentUser, onLogout, onNavigate }) => {
     return (
         <header className="bg-slate-900/50 py-4 px-4 sm:px-8 border-b border-transparent text-center sticky top-0 z-20 backdrop-blur-sm"
             style={{ borderImage: 'linear-gradient(to right, #fbbf24, #4338ca) 1' }}
@@ -41,15 +41,6 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onOpenSettings, curren
                         >
                             <HomeIcon className="w-7 h-7" />
                         </button>
-                         {onOpenSettings && currentUser?.isAdmin && (
-                             <button
-                                onClick={onOpenSettings}
-                                title="App Settings"
-                                className="text-slate-400 hover:text-yellow-400 transition-colors"
-                            >
-                                <SettingsIcon className="w-7 h-7" />
-                            </button>
-                        )}
                     </div>
                 
                     <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-4">

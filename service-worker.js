@@ -1,4 +1,5 @@
-const CACHE_NAME = 'smart-blo-cache-v4';
+
+const CACHE_NAME = 'smart-blo-cache-v6';
 const URLS_TO_CACHE = [
     '/',
     '/index.html',
@@ -18,7 +19,6 @@ const URLS_TO_CACHE = [
     '/components/LoginScreen.tsx',
     '/components/VoterFormModal.tsx',
     '/components/AboutPage.tsx',
-    '/components/SettingsModal.tsx',
     '/components/AdminDashboard.tsx',
     '/hooks/useGemini.ts',
     '/hooks/useSpeechRecognition.ts',
@@ -60,8 +60,6 @@ self.addEventListener('fetch', (event) => {
                     return networkResponse;
                 }).catch(error => {
                     console.error('Fetch failed:', error);
-                    // If network fails and there's no cache, the request will fail.
-                    // A custom offline page could be returned here if it were cached.
                     throw error;
                 });
 

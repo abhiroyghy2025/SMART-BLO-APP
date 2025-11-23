@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import type { VoterRecord } from '../types';
 import { Modal } from './Modal';
@@ -13,13 +12,12 @@ interface VoterFormModalProps {
     onClose: () => void;
     onSave: (record: Partial<VoterRecord>) => void;
     headers: string[];
-    apiKey?: string;
 }
 
-export const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSave, headers, apiKey }) => {
+export const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSave, headers }) => {
     const [newRecord, setNewRecord] = useState<Partial<VoterRecord>>({});
     const { text: voiceInputText, isListening, startListening, stopListening, hasRecognitionSupport } = useSpeechRecognition();
-    const ai = useGemini(apiKey);
+    const ai = useGemini();
     const [writtenCommand, setWrittenCommand] = useState('');
 
     useEffect(() => {

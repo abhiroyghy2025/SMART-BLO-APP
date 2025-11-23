@@ -1,5 +1,4 @@
 
-
 export interface VoterRecord {
     [key: string]: any;
     __id: string;
@@ -13,15 +12,11 @@ export interface BloInfo {
     "CONTACT NO": string;
 }
 
-export interface GeminiConfig {
-    apiKey: string;
-}
-
 export interface User {
     id: string;
     name: string;
     emailOrPhone: string;
-    passwordHash: string; // In a real app, this would be a securely generated hash.
+    passwordHash: string; // Restored for local auth
     isAdmin: boolean;
     bloInfo: BloInfo;
     voterData: VoterRecord[];

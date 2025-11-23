@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' b:version='2' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+  <head>
+    <meta content='width=device-width, initial-scale=1' name='viewport'/>
+    <title><data:blog.pageTitle/></title>
+    <b:skin><![CDATA[
+      /* Reset and Fullscreen Iframe Styles */
+      body, html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden; /* Prevent double scrollbars */
+        background-color: #0f172a;
+      }
+      .app-wrapper {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+      iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+        display: block;
+      }
+    ]]></b:skin>
+  </head>
+  <body>
+    <b:section id='main' showaddelement='yes'>
+      <b:widget id='HTML1' locked='true' title='Smart BLO App Frame' type='HTML' version='2' visible='true'>
+        <b:widget-settings>
+          <b:widget-setting name='content'>
+            <![CDATA[
+              <div class="app-wrapper">
+                <!-- REPLACE 'YOUR_DEPLOYED_APP_URL' BELOW WITH YOUR ACTUAL FIREBASE HOSTING URL -->
+                <iframe 
+                  src="https://smart-b-l-o-157964429487.us-west1.run.app" 
+                  allow="microphone; camera; clipboard-read; clipboard-write; geolocation"
+                  title="Smart B.L.O.">
+                </iframe>
+              </div>
+            ]]>
+          </b:widget-setting>
+        </b:widget-settings>
+        <b:includable id='main'>
+          <data:content/>
+        </b:includable>
+      </b:widget>
+    </b:section>
+  </body>
+</html>

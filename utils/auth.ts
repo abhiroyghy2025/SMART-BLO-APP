@@ -1,80 +1,42 @@
+
 import type { User, BloInfo, VoterRecord } from '../types';
 
-// In a real application, this would be a secure, server-side database.
-// We are using localStorage to simulate this for the browser-only environment.
-const USERS_STORAGE_KEY = 'smart-blo-users';
-const SESSION_STORAGE_KEY = 'smart-blo-session';
+const STORAGE_KEY_USERS = 'smart_blo_users_v2';
+const STORAGE_KEY_SESSION = 'smart_blo_session_v2';
 
 // --- Helper Functions ---
 
 const getUsers = (): User[] => {
     try {
-        const usersJson = localStorage.getItem(USERS_STORAGE_KEY);
-        return usersJson ? JSON.parse(usersJson) : [];
+        const stored = localStorage.getItem(STORAGE_KEY_USERS);
+        return stored ? JSON.parse(stored) : [];
     } catch {
         return [];
     }
 };
 
 const saveUsers = (users: User[]) => {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
 };
 
-// Simple hashing function for demonstration. A real app MUST use a strong, salted hashing algorithm like bcrypt.
 const hashPassword = (password: string): string => {
-    // This is NOT secure. For demonstration purposes only.
-    return `hashed_${password}`;
+    // Simple simulation of hashing for local storage
+    return btoa(password).split('').reverse().join('');
 };
 
-// --- Admin Setup ---
+// --- Auth API ---
 
-const ADMIN_CREDENTIALS = {
-    emailOrPhone1: 'abhiroy.ghy@gmail.com',
-    emailOrPhone2: '9474431525',
-    password: 'Abhi@1234',
-    name: 'Sukamal Roy (Admin)',
-};
-
-const initializeAdmin = () => {
+export const signUp = async (name: string, email: string, password: string, bloInfo: BloInfo): Promise<{ success: boolean, message: string, user?: User }> => {
     const users = getUsers();
-    let adminExists = users.some(u => u.emailOrPhone === ADMIN_CREDENTIALS.emailOrPhone1);
-    if (!adminExists) {
-        const adminUser: User = {
-            id: `user_${Date.now()}`,
-            name: ADMIN_CREDENTIALS.name,
-            emailOrPhone: ADMIN_CREDENTIALS.emailOrPhone1,
-            passwordHash: hashPassword(ADMIN_CREDENTIALS.password),
-            isAdmin: true,
-            bloInfo: {
-                "LAC NO & NAME": "N/A",
-                "PART NO & NAME": "N/A",
-                "NAME OF THE BLO": ADMIN_CREDENTIALS.name,
-                "CONTACT NO": ADMIN_CREDENTIALS.emailOrPhone2,
-            },
-            voterData: [],
-            headers: [],
-        };
-        users.push(adminUser);
-        saveUsers(users);
-    }
-};
-
-// Ensure admin exists on script load
-initializeAdmin();
-
-
-// --- Public Auth API ---
-
-export const signUp = (name: string, emailOrPhone: string, password: string, bloInfo: BloInfo): { success: boolean, message: string, user?: User } => {
-    const users = getUsers();
-    if (users.some(u => u.emailOrPhone.toLowerCase() === emailOrPhone.toLowerCase())) {
-        return { success: false, message: "A user with this email or phone number already exists." };
+    
+    if (users.some(u => u.emailOrPhone === email)) {
+        return { success: false, message: "User already exists." };
     }
 
     const newUser: User = {
-        id: `user_${Date.now()}_${Math.random()}`,
+        id: `user_${Date.now()}`,
         name,
-        emailOrPhone,
+        emailOrPhone: email,
         passwordHash: hashPassword(password),
         isAdmin: false,
         bloInfo,
@@ -82,87 +44,95 @@ export const signUp = (name: string, emailOrPhone: string, password: string, blo
         headers: [],
     };
 
+    // First user becomes admin automatically (optional feature, helpful for testing)
+    if (users.length === 0) {
+        newUser.isAdmin = true;
+    }
+
     users.push(newUser);
     saveUsers(users);
+    
+    // Auto login
+    localStorage.setItem(STORAGE_KEY_SESSION, newUser.id);
+    
     return { success: true, message: "Sign up successful!", user: newUser };
 };
 
-export const login = (emailOrPhone: string, password: string): { success: boolean, message: string, user?: User } => {
+export const login = async (email: string, password: string): Promise<{ success: boolean, message: string, user?: User }> => {
     const users = getUsers();
-    const normalizedInput = emailOrPhone.toLowerCase();
-    
-    const user = users.find(u => 
-        u.emailOrPhone.toLowerCase() === normalizedInput ||
-        (u.isAdmin && (ADMIN_CREDENTIALS.emailOrPhone1 === normalizedInput || ADMIN_CREDENTIALS.emailOrPhone2 === normalizedInput))
-    );
+    const user = users.find(u => u.emailOrPhone === email && u.passwordHash === hashPassword(password));
 
-    const passwordToMatch = user?.isAdmin ? hashPassword(ADMIN_CREDENTIALS.password) : hashPassword(password);
-
-    if (user && user.passwordHash === passwordToMatch) {
-        localStorage.setItem(SESSION_STORAGE_KEY, user.id);
+    if (user) {
+        localStorage.setItem(STORAGE_KEY_SESSION, user.id);
         return { success: true, message: "Login successful!", user };
     }
     
-    return { success: false, message: "Invalid credentials. Please try again." };
+    return { success: false, message: "Invalid credentials." };
 };
 
-export const logout = () => {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-};
-
-export const getCurrentUser = (): User | null => {
-    const userId = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!userId) return null;
-
+export const getCurrentUser = async (): Promise<User | null> => {
+    const sessionId = localStorage.getItem(STORAGE_KEY_SESSION);
+    if (!sessionId) return null;
+    
     const users = getUsers();
-    return users.find(u => u.id === userId) || null;
+    return users.find(u => u.id === sessionId) || null;
 };
 
-export const updateUserData = (userId: string, data: { voterData: VoterRecord[], headers: string[] }): boolean => {
-    const users = getUsers();
-    const userIndex = users.findIndex(u => u.id === userId);
-    if (userIndex === -1) return false;
+export const logout = async () => {
+    localStorage.removeItem(STORAGE_KEY_SESSION);
+};
 
-    users[userIndex].voterData = data.voterData;
-    users[userIndex].headers = data.headers;
-    saveUsers(users);
-    return true;
+export const updateUserData = async (userId: string, data: { voterData: VoterRecord[], headers: string[] }): Promise<boolean> => {
+    const users = getUsers();
+    const index = users.findIndex(u => u.id === userId);
+    
+    if (index !== -1) {
+        users[index].voterData = data.voterData;
+        users[index].headers = data.headers;
+        saveUsers(users);
+        return true;
+    }
+    return false;
 };
 
 // --- Admin Functions ---
 
-export const getAllUsers = (): User[] => {
-    // In a real app, this would be a protected admin endpoint.
+export const getAllUsers = async (): Promise<User[]> => {
     return getUsers();
 };
 
-export const updateUserByAdmin = (userId: string, updates: { name: string, bloInfo: BloInfo }): boolean => {
+export const updateUserByAdmin = async (userId: string, updates: { name: string, bloInfo: BloInfo }): Promise<boolean> => {
     const users = getUsers();
-    const userIndex = users.findIndex(u => u.id === userId);
-    if (userIndex === -1) return false;
-
-    users[userIndex].name = updates.name;
-    users[userIndex].bloInfo = updates.bloInfo;
-    saveUsers(users);
-    return true;
+    const index = users.findIndex(u => u.id === userId);
+    
+    if (index !== -1) {
+        users[index].name = updates.name;
+        users[index].bloInfo = updates.bloInfo;
+        saveUsers(users);
+        return true;
+    }
+    return false;
 };
 
-export const resetPasswordByAdmin = (userId: string, newPassword: string): boolean => {
+export const resetPasswordByAdmin = async (email: string): Promise<boolean> => {
     const users = getUsers();
-    const userIndex = users.findIndex(u => u.id === userId);
-    if (userIndex === -1) return false;
-
-    users[userIndex].passwordHash = hashPassword(newPassword);
-    saveUsers(users);
-    return true;
+    const index = users.findIndex(u => u.emailOrPhone === email);
+    
+    if (index !== -1) {
+        // Reset to default: "123456"
+        users[index].passwordHash = hashPassword("123456");
+        saveUsers(users);
+        return true;
+    }
+    return false;
 };
 
-export const deleteUserByAdmin = (userId: string): boolean => {
+export const deleteUserByAdmin = async (userId: string): Promise<boolean> => {
     let users = getUsers();
     const initialLength = users.length;
     users = users.filter(u => u.id !== userId);
     
-    if (users.length < initialLength) {
+    if (users.length !== initialLength) {
         saveUsers(users);
         return true;
     }

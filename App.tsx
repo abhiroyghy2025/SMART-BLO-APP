@@ -1,5 +1,6 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
-import type { VoterRecord, BloInfo, GeminiConfig, User } from './types';
+import type { VoterRecord, User } from './types';
 import { DataEditor } from './components/DataEditor';
 import { Header } from './components/Header';
 import { HomeScreen } from './components/HomeScreen';
@@ -7,9 +8,9 @@ import { SearchPage } from './components/SearchPage';
 import { LoginScreen } from './components/LoginScreen';
 import { VoterFormModal } from './components/VoterFormModal';
 import { AboutPage } from './components/AboutPage';
-import { SettingsModal } from './components/SettingsModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { getCurrentUser, logout, updateUserData } from './utils/auth';
+import { SpinnerIcon } from './components/icons';
 
 declare const XLSX: any;
 
@@ -26,56 +27,44 @@ const DEFAULT_HEADERS = [
 
 const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [isAuthLoading, setIsAuthLoading] = useState(true);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [view, setView] = useState<AppView>('home');
     const [fileName, setFileName] = useState<string>('VoterData.xlsx');
     const [isAddVoterModalOpen, setIsAddVoterModalOpen] = useState(false);
-    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-    const [geminiConfig, setGeminiConfig] = useState<GeminiConfig | null>(null);
 
+    // Initial Auth Check
     useEffect(() => {
-        // Check for active session
-        const user = getCurrentUser();
-        if (user) {
+        const checkAuth = async () => {
+            const user = await getCurrentUser();
             setCurrentUser(user);
-        }
-        
-        // Load saved configs
-        try {
-            const savedGeminiConfig = localStorage.getItem('geminiConfig');
-            if (savedGeminiConfig) setGeminiConfig(JSON.parse(savedGeminiConfig));
-        } catch (e) {
-            console.error("Failed to parse configs from localStorage", e);
-            localStorage.removeItem('geminiConfig');
-        }
+            setIsAuthLoading(false);
+        };
+        checkAuth();
     }, []);
 
-    const handleLoginSuccess = () => {
-        const user = getCurrentUser();
-        if (user) {
-            setCurrentUser(user);
-            setView('home');
-        } else {
-             setError("Login failed unexpectedly. Please try again.");
-        }
+    const handleLoginSuccess = (user: User) => {
+        setCurrentUser(user);
+        setView('home');
     };
 
-    const handleLogout = () => {
-        logout();
+    const handleLogout = async () => {
+        await logout();
         setCurrentUser(null);
         setView('home');
     };
     
-    const saveCurrentUserData = useCallback((updatedData: { voterData: VoterRecord[], headers: string[] }) => {
+    const saveCurrentUserData = useCallback(async (updatedData: { voterData: VoterRecord[], headers: string[] }) => {
         if (!currentUser) return;
         
-        const success = updateUserData(currentUser.id, updatedData);
-        if (success) {
-            // Update state to reflect changes immediately
-            setCurrentUser(prevUser => prevUser ? { ...prevUser, ...updatedData } : null);
-        } else {
-            alert("Error: Could not save data. Your session might have expired. Please log out and log back in.");
+        // Optimistic UI update
+        const updatedUser = { ...currentUser, ...updatedData };
+        setCurrentUser(updatedUser);
+
+        const success = await updateUserData(currentUser.id, updatedData);
+        if (!success) {
+            console.error("Failed to save data to local storage");
         }
     }, [currentUser]);
 
@@ -83,12 +72,11 @@ const App: React.FC = () => {
         if (!currentUser) return;
         setIsLoading(true);
         setError(null);
-        // ... (validation logic is the same)
+        
         setFileName(file.name);
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                // ... (parsing logic is the same as before)
                 const fileData = e.target?.result;
                 if (!fileData) throw new Error("File could not be read.");
                 const workbook = XLSX.read(fileData, { type: 'binary' });
@@ -153,14 +141,9 @@ const App: React.FC = () => {
         setIsAddVoterModalOpen(false);
         alert('New voter added successfully!');
     };
-    
-    const handleSaveGeminiConfig = (config: GeminiConfig) => {
-        setGeminiConfig(config);
-        localStorage.setItem('geminiConfig', JSON.stringify(config));
-    };
 
     const renderContent = () => {
-        if (!currentUser) return null; // Should not happen if logic is correct
+        if (!currentUser) return null;
         
         const currentData = currentUser.voterData || [];
         const currentHeaders = currentUser.headers.length > 0 ? currentUser.headers : DEFAULT_HEADERS;
@@ -169,25 +152,36 @@ const App: React.FC = () => {
             case 'home':
                 return <HomeScreen onNavigate={handleNavigate} voterCount={currentData.length} bloInfo={currentUser.bloInfo} onAddVoterClick={() => setIsAddVoterModalOpen(true)} />;
             case 'search':
-                 return <SearchPage data={currentData} headers={currentHeaders} onGoHome={() => setView('home')} onDataUpdate={(updatedData) => saveCurrentUserData({ voterData: updatedData, headers: currentHeaders })} totalRecords={currentData.length} apiKey={geminiConfig?.apiKey} />;
+                 return <SearchPage data={currentData} headers={currentHeaders} onGoHome={() => setView('home')} onDataUpdate={(updatedData) => saveCurrentUserData({ voterData: updatedData, headers: currentHeaders })} totalRecords={currentData.length} />;
             case 'editor':
-                return <DataEditor initialData={currentData} initialHeaders={currentHeaders} onReset={handleReset} fileName={fileName} onGoHome={() => setView('home')} bloInfo={currentUser.bloInfo} onFileLoad={handleFileLoad} isLoading={isLoading} error={error} onSave={(d, h) => saveCurrentUserData({ voterData: d, headers: h })} apiKey={geminiConfig?.apiKey} />;
+                return <DataEditor initialData={currentData} initialHeaders={currentHeaders} onReset={handleReset} fileName={fileName} onGoHome={() => setView('home')} bloInfo={currentUser.bloInfo} onFileLoad={handleFileLoad} isLoading={isLoading} error={error} onSave={(d, h) => saveCurrentUserData({ voterData: d, headers: h })} />;
             case 'about':
                 return <AboutPage onGoHome={() => setView('home')} />;
             case 'admin':
-                return currentUser.isAdmin ? <AdminDashboard onGoHome={() => setView('home')} /> : <p>Access Denied</p>;
+                return currentUser.isAdmin ? <AdminDashboard onGoHome={() => setView('home')} /> : <p className="text-center text-red-500 mt-10">Access Denied</p>;
             default:
                 return <HomeScreen onNavigate={handleNavigate} voterCount={currentData.length} bloInfo={currentUser.bloInfo} onAddVoterClick={() => setIsAddVoterModalOpen(true)} />;
         }
     }
-    
+
+    if (isAuthLoading) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <div className="text-center">
+                    <SpinnerIcon className="w-12 h-12 text-yellow-400 animate-spin mx-auto mb-4" />
+                    <p className="text-yellow-400 font-copperplate-gothic text-xl">Loading System...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-transparent font-cambria pb-8">
             {!currentUser ? (
                 <LoginScreen onLoginSuccess={handleLoginSuccess} />
              ) : (
                 <>
-                    <Header onGoHome={() => setView('home')} onOpenSettings={() => setIsSettingsModalOpen(true)} currentUser={currentUser} onLogout={handleLogout} onNavigate={handleNavigate} />
+                    <Header onGoHome={() => setView('home')} currentUser={currentUser} onLogout={handleLogout} onNavigate={handleNavigate} />
                     <main className="container mx-auto p-4 md:p-8">
                        {renderContent()}
                     </main>
@@ -196,13 +190,6 @@ const App: React.FC = () => {
                         onClose={() => setIsAddVoterModalOpen(false)}
                         onSave={handleSaveNewVoter}
                         headers={currentUser.headers.length > 0 ? currentUser.headers.filter(h => h !== SERIAL_NUMBER_HEADER) : DEFAULT_HEADERS.filter(h => h !== SERIAL_NUMBER_HEADER)}
-                        apiKey={geminiConfig?.apiKey}
-                    />
-                    <SettingsModal
-                        isOpen={isSettingsModalOpen}
-                        onClose={() => setIsSettingsModalOpen(false)}
-                        onSaveGemini={handleSaveGeminiConfig}
-                        currentGeminiConfig={geminiConfig}
                     />
                 </>
              )}

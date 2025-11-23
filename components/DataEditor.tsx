@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { VoterRecord, BloInfo } from '../types';
 import { DataTable } from './DataTable';
@@ -22,7 +21,6 @@ interface DataEditorProps {
     isLoading: boolean;
     error: string | null;
     onSave: (data: VoterRecord[], headers: string[]) => void;
-    apiKey?: string;
 }
 
 const SERIAL_NUMBER_HEADER = 'SERIAL NO';
@@ -92,7 +90,7 @@ const useHistory = (initialState: EditorState, onSave: (state: EditorState) => v
     };
 };
 
-export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHeaders, onReset, fileName, onGoHome, bloInfo, onFileLoad, isLoading, error, onSave, apiKey }) => {
+export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHeaders, onReset, fileName, onGoHome, bloInfo, onFileLoad, isLoading, error, onSave }) => {
     
     const handleSave = useCallback((state: EditorState) => {
         onSave(state.data, state.headers);
@@ -100,7 +98,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
     
     const { state, setState, undo, redo, canUndo, canRedo } = useHistory({ data: initialData, headers: initialHeaders }, handleSave);
     const { data, headers } = state;
-    const ai = useGemini(apiKey);
+    const ai = useGemini();
     
     const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
     const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
@@ -179,10 +177,10 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
     
         try {
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-pro',
+                model: 'gemini-3-pro-preview',
                 contents: prompt,
             });
-            setAnalysisResult(response.text);
+            setAnalysisResult(response.text || "No analysis generated.");
         } catch (error) {
             console.error("Error analyzing data with Gemini:", error);
             setAnalysisResult("An error occurred while analyzing the data. Please check your API key and try again.");
@@ -429,7 +427,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
             const newHeaders = currentState.headers.map(h => (h === oldName ? newName : h));
             const newData = currentState.data.map(row => {
                 const { [oldName]: value, ...rest } = row;
-                return { ...rest, [newName]: value };
+                return { ...rest, [newName]: value } as VoterRecord;
             });
             return { headers: newHeaders, data: newData };
         });
@@ -460,7 +458,7 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
         { label: 'Duplicate Selected', icon: CopyIcon, action: duplicateSelectedRows, disabled: selectedRows.size === 0, color: 'yellow', tooltip: 'Create a copy of the selected rows' },
         { label: 'Highlight Selected', icon: HighlightIcon, action: highlightSelectedRows, disabled: selectedRows.size === 0, color: 'yellow', tooltip: 'Toggle a visual highlight on selected rows' },
         { label: 'Batch Update', icon: EditIcon, action: () => setIsBatchUpdateOpen(true), disabled: selectedRows.size === 0, color: 'yellow', tooltip: 'Update a specific column for all selected rows at once' },
-        { label: 'Analyze with AI', icon: GeminiIcon, action: handleAnalyzeSelection, disabled: selectedRows.size === 0 || !ai, color: 'purple', tooltip: !ai ? 'Please set your Gemini API Key in Settings' : 'Get an AI-powered summary of the selected data' },
+        { label: 'Analyze with AI', icon: GeminiIcon, action: handleAnalyzeSelection, disabled: selectedRows.size === 0 || !ai, color: 'purple', tooltip: !ai ? 'Gemini API Key missing' : 'Get an AI-powered summary of the selected data' },
         { label: 'Manage Columns', icon: ColumnsIcon, action: () => setIsColumnManagerOpen(true), disabled: false, color: 'gray', tooltip: 'Show or hide columns from the table view' },
         { label: 'Download Excel', icon: DownloadIcon, action: downloadExcel, disabled: false, color: 'green', tooltip: 'Download the current data as an Excel (.xlsx) file' },
         { label: 'Export to PDF', icon: PdfIcon, action: exportToPdf, disabled: false, color: 'purple', tooltip: 'Export the current view as a PDF document' },
@@ -650,19 +648,21 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                                         onChange={() => handleColumnVisibilityToggle(header)}
                                         disabled={header === SERIAL_NUMBER_HEADER}
                                     />
-                                    <label htmlFor={`vis-${header}`} className={`ml-2 text-slate-300 truncate ${header === SERIAL_NUMBER_HEADER ? 'opacity-50' : ''}`} title={header}>{header}</label>
+                                    <label htmlFor={`vis-${header}`} className="ml-2 text-sm text-slate-300 truncate cursor-pointer" title={header}>
+                                        {header}
+                                    </label>
                                 </div>
                             ))
                         ) : (
-                             <p className="text-gray-400 col-span-full text-center py-4">No columns found.</p>
+                            <p className="text-slate-500 col-span-full text-center">No columns found.</p>
                         )}
                     </div>
-                     <div className="flex justify-between items-center gap-4 pt-2">
-                        <button
+                     <div className="flex justify-between items-center pt-4 border-t border-slate-700">
+                         <button
                             type="button"
                             onClick={handleResetColumns}
-                            className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded transition-colors"
-                        >
+                            className="text-sm text-yellow-500 hover:text-yellow-400 hover:underline"
+                         >
                             Reset to Default
                         </button>
                         <button
@@ -676,8 +676,11 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                 </div>
             </Modal>
             
-            <Modal isOpen={isBatchUpdateOpen} onClose={() => setIsBatchUpdateOpen(false)} title={`Batch Update ${selectedRows.size} Rows`}>
+            <Modal isOpen={isBatchUpdateOpen} onClose={() => setIsBatchUpdateOpen(false)} title="Batch Update">
                  <div className="space-y-4">
+                     <p className="text-slate-300 text-sm">
+                        Update <strong>{selectedRows.size}</strong> selected row(s).
+                    </p>
                     <div>
                         <label htmlFor="batch-column" className="block text-sm font-medium text-slate-300 mb-1">
                             Column to Update
@@ -704,20 +707,8 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
                         />
                     </div>
                     <div className="flex justify-end gap-4 pt-2">
-                        <button
-                            type="button"
-                            onClick={() => setIsBatchUpdateOpen(false)}
-                            className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleBatchUpdate}
-                            className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded transition-colors"
-                        >
-                            Apply Update
-                        </button>
+                        <button type="button" onClick={() => setIsBatchUpdateOpen(false)} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded transition-colors">Cancel</button>
+                        <button type="button" onClick={handleBatchUpdate} className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded transition-colors">Update</button>
                     </div>
                 </div>
             </Modal>
@@ -725,27 +716,14 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
             <Modal isOpen={isDeleteConfirmModalOpen} onClose={() => setIsDeleteConfirmModalOpen(false)} title="Confirm Deletion">
                 <div className="space-y-4">
                     <p className="text-slate-300">
-                        Are you sure you want to delete the selected {selectedRows.size} row{selectedRows.size > 1 ? 's' : ''}?
+                        Are you sure you want to delete the selected {selectedRows.size} row{selectedRows.size > 1 ? 's' : ''}? This action cannot be undone.
                     </p>
                     <div className="flex justify-end gap-4 pt-2">
-                        <button
-                            type="button"
-                            onClick={() => setIsDeleteConfirmModalOpen(false)}
-                            className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleConfirmDelete}
-                            className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded transition-colors"
-                        >
-                            Confirm
-                        </button>
+                        <button type="button" onClick={() => setIsDeleteConfirmModalOpen(false)} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded transition-colors">Cancel</button>
+                        <button type="button" onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded transition-colors">Confirm Delete</button>
                     </div>
                 </div>
             </Modal>
-
         </div>
     );
 };
