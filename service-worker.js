@@ -1,12 +1,11 @@
 
-const CACHE_NAME = 'smart-blo-cache-v6';
+const CACHE_NAME = 'smart-blo-cache-v7';
 const URLS_TO_CACHE = [
     '/',
     '/index.html',
     '/manifest.json',
     '/index.tsx',
     '/App.tsx',
-    '/types.ts',
     '/metadata.json',
     '/components/FileUpload.tsx',
     '/components/DataEditor.tsx',

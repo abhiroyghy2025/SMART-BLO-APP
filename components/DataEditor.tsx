@@ -176,14 +176,19 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
     ${dataString}`;
     
         try {
+            // Using flash model for better rate limits
             const response = await ai.models.generateContent({
-                model: 'gemini-3-pro-preview',
+                model: 'gemini-2.5-flash',
                 contents: prompt,
             });
             setAnalysisResult(response.text || "No analysis generated.");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error analyzing data with Gemini:", error);
-            setAnalysisResult("An error occurred while analyzing the data. Please check your API key and try again.");
+            if (error.toString().includes("429") || error.toString().includes("Rate exceeded") || error.toString().includes("Quota")) {
+                setAnalysisResult("⚠️ API Rate Limit Exceeded.\n\nYou have made too many requests in a short period. Please wait a minute before trying again.");
+            } else {
+                setAnalysisResult(`An error occurred while analyzing the data: ${error.message || 'Unknown error'}`);
+            }
         } finally {
             setIsAnalyzing(false);
         }

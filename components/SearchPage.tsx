@@ -38,8 +38,12 @@ export const SearchPage: React.FC<SearchPageProps> = ({ data, headers, onGoHome,
                     });
                     const extractedTerm = response.text.trim();
                     setSearchTerm(extractedTerm);
-                } catch (error) {
+                } catch (error: any) {
                     console.error("Error processing voice search with Gemini:", error);
+                    if (error.toString().includes("429") || error.toString().includes("Rate exceeded")) {
+                        // Silent fail to raw text if quota exceeded to not interrupt user flow too much
+                        console.warn("Rate limit exceeded, falling back to raw voice text.");
+                    }
                     setSearchTerm(voiceSearchText); // Fallback to raw transcript
                 }
             } else if (voiceSearchText && !isVoiceSearching) {

@@ -42,8 +42,11 @@ export const parseVoiceInputWithGemini = async (transcript: string, headers: str
         }
         return {};
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error parsing voice input with Gemini:", error);
+        if (error.toString().includes("429") || error.toString().includes("Rate exceeded") || error.toString().includes("Quota")) {
+            alert("API Rate Limit Exceeded: You are making requests too quickly. Please wait a moment before using voice commands again.");
+        }
         return {};
     }
 };
