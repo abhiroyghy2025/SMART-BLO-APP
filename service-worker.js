@@ -1,6 +1,4 @@
-
-
-const CACHE_NAME = 'smart-blo-cache-v2';
+const CACHE_NAME = 'smart-blo-cache-v4';
 const URLS_TO_CACHE = [
     '/',
     '/index.html',
@@ -20,7 +18,6 @@ const URLS_TO_CACHE = [
     '/components/LoginScreen.tsx',
     '/components/VoterFormModal.tsx',
     '/components/AboutPage.tsx',
-    '/components/Adsense.tsx',
     '/components/SettingsModal.tsx',
     '/components/AdminDashboard.tsx',
     '/hooks/useGemini.ts',

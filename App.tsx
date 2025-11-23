@@ -1,5 +1,3 @@
-
-
 import React, { useState, useCallback, useEffect } from 'react';
 import type { VoterRecord, BloInfo, GeminiConfig, User } from './types';
 import { DataEditor } from './components/DataEditor';
@@ -9,7 +7,6 @@ import { SearchPage } from './components/SearchPage';
 import { LoginScreen } from './components/LoginScreen';
 import { VoterFormModal } from './components/VoterFormModal';
 import { AboutPage } from './components/AboutPage';
-import { Adsense } from './components/Adsense';
 import { SettingsModal } from './components/SettingsModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { getCurrentUser, logout, updateUserData } from './utils/auth';
@@ -185,7 +182,7 @@ const App: React.FC = () => {
     }
     
     return (
-        <div className="min-h-screen bg-transparent font-cambria pb-64 md:pb-80">
+        <div className="min-h-screen bg-transparent font-cambria pb-8">
             {!currentUser ? (
                 <LoginScreen onLoginSuccess={handleLoginSuccess} />
              ) : (
@@ -209,8 +206,6 @@ const App: React.FC = () => {
                     />
                 </>
              )}
-
-            <Adsense />
         </div>
     );
 };
