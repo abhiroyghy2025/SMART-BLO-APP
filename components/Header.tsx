@@ -12,7 +12,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onGoHome, currentUser, onLogout, onNavigate }) => {
     return (
-        <header className="bg-slate-900/50 py-4 px-4 sm:px-8 border-b border-transparent text-center sticky top-0 z-20 backdrop-blur-sm"
+        <header className="bg-slate-900/50 py-4 px-4 sm:px-8 border-b border-transparent text-center backdrop-blur-sm"
             style={{ borderImage: 'linear-gradient(to right, #fbbf24, #4338ca) 1' }}
         >
             <div className="max-w-xl mx-auto">

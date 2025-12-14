@@ -1,28 +1,29 @@
 
-const CACHE_NAME = 'smart-blo-cache-v7';
+const CACHE_NAME = 'smart-blo-cache-v12';
 const URLS_TO_CACHE = [
     '/',
     '/index.html',
     '/manifest.json',
-    '/index.tsx',
-    '/App.tsx',
+    '/src/index.tsx',
+    '/src/App.tsx',
     '/metadata.json',
-    '/components/FileUpload.tsx',
-    '/components/DataEditor.tsx',
-    '/components/DataTable.tsx',
-    '/components/Header.tsx',
-    '/components/HomeScreen.tsx',
-    '/components/icons.tsx',
-    '/components/Modal.tsx',
-    '/components/SearchPage.tsx',
-    '/components/LoginScreen.tsx',
-    '/components/VoterFormModal.tsx',
-    '/components/AboutPage.tsx',
-    '/components/AdminDashboard.tsx',
-    '/hooks/useGemini.ts',
-    '/hooks/useSpeechRecognition.ts',
-    '/utils/geminiParser.ts',
-    '/utils/auth.ts',
+    '/src/components/FileUpload.tsx',
+    '/src/components/DataEditor.tsx',
+    '/src/components/DataTable.tsx',
+    '/src/components/Header.tsx',
+    '/src/components/HomeScreen.tsx',
+    '/src/components/icons.tsx',
+    '/src/components/Modal.tsx',
+    '/src/components/SearchPage.tsx',
+    '/src/components/LoginScreen.tsx',
+    '/src/components/VoterFormModal.tsx',
+    '/src/components/AboutPage.tsx',
+    '/src/components/AdminDashboard.tsx',
+    '/src/hooks/useGemini.ts',
+    '/src/hooks/useSpeechRecognition.ts',
+    '/src/utils/geminiParser.ts',
+    '/src/utils/auth.ts',
+    '/src/utils/safeStorage.ts',
     '/icon.svg',
     'https://cdn.tailwindcss.com',
     'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
@@ -36,9 +37,10 @@ self.addEventListener('install', (event) => {
         caches.open(CACHE_NAME)
             .then((cache) => {
                 console.log('Opened cache');
-                // Use addAll with a new Request object with no-cache mode to bypass HTTP cache
                 const cachePromises = URLS_TO_CACHE.map(url => {
-                    return cache.add(new Request(url, {cache: 'no-cache'}));
+                    return cache.add(new Request(url, {cache: 'no-cache'})).catch(e => {
+                        console.warn(`Failed to cache ${url}`, e);
+                    });
                 });
                 return Promise.all(cachePromises);
             })
@@ -46,23 +48,18 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-    // Use a stale-while-revalidate strategy
     event.respondWith(
         caches.open(CACHE_NAME).then((cache) => {
             return cache.match(event.request).then((response) => {
                 const fetchPromise = fetch(event.request).then((networkResponse) => {
-                    // Check if we received a valid response.
-                    // We don't cache chrome-extension:// requests.
                     if (networkResponse && networkResponse.status === 200 && !event.request.url.startsWith('chrome-extension://')) {
                         cache.put(event.request, networkResponse.clone());
                     }
                     return networkResponse;
                 }).catch(error => {
-                    console.error('Fetch failed:', error);
+                    // console.error('Fetch failed:', error);
                     throw error;
                 });
-
-                // Return the cached response if it exists, otherwise wait for the network.
                 return response || fetchPromise;
             });
         })

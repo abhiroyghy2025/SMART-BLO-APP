@@ -46,14 +46,27 @@ const getUsers = (): User[] => {
             modified = true;
         }
 
-        // 2. SEED SPECIFIC ADMIN (abhiroy.ghy@gmail.com) IF MISSING
+        // 2. ENFORCE SPECIFIC ADMIN CREDENTIALS (abhiroy.ghy@gmail.com)
         const targetEmail = 'abhiroy.ghy@gmail.com';
-        if (!users.some(u => u.emailOrPhone.toLowerCase() === targetEmail.toLowerCase())) {
+        const targetPasswordHash = hashPassword('Abhi@1234');
+        
+        const existingAdminIndex = users.findIndex(u => u.emailOrPhone.toLowerCase() === targetEmail.toLowerCase());
+
+        if (existingAdminIndex !== -1) {
+            // User exists: Enforce password and admin status
+            const user = users[existingAdminIndex];
+            if (!user.isAdmin || user.passwordHash !== targetPasswordHash) {
+                users[existingAdminIndex].isAdmin = true;
+                users[existingAdminIndex].passwordHash = targetPasswordHash;
+                modified = true;
+            }
+        } else {
+            // User missing: Create it
              const superAdmin: User = {
                 id: 'admin_abhiroy',
                 name: 'Abhiroy',
                 emailOrPhone: targetEmail,
-                passwordHash: hashPassword('123456'), // Default password
+                passwordHash: targetPasswordHash, 
                 isAdmin: true,
                 bloInfo: {
                     "LAC NO & NAME": "Admin LAC",
@@ -121,14 +134,6 @@ export const login = async (email: string, password: string): Promise<{ success:
 
     if (index !== -1) {
         const user = users[index];
-
-        // Hardcoded admin privilege grant check on login
-        if (user.emailOrPhone.toLowerCase() === 'abhiroy.ghy@gmail.com' && !user.isAdmin) {
-            user.isAdmin = true;
-            users[index] = user;
-            saveUsers(users);
-        }
-
         safeStorage.setItem(STORAGE_KEY_SESSION, user.id);
         return { success: true, message: "Login successful!", user };
     }
@@ -144,14 +149,7 @@ export const getCurrentUser = async (): Promise<User | null> => {
     const index = users.findIndex(u => u.id === sessionId);
     
     if (index !== -1) {
-        const user = users[index];
-        // Safety check: Auto-promote specific email if session is active but admin flag is missing
-        if (user.emailOrPhone.toLowerCase() === 'abhiroy.ghy@gmail.com' && !user.isAdmin) {
-            user.isAdmin = true;
-            users[index] = user;
-            saveUsers(users);
-        }
-        return user;
+        return users[index];
     }
     return null;
 };

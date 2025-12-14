@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { Component, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 
+// Polyfill process to prevent crashes in some environments/SDKs
+if (typeof window !== 'undefined' && typeof (window as any).process === 'undefined') {
+  (window as any).process = { env: {} };
+}
+
 interface ErrorBoundaryProps {
-  children?: React.ReactNode;
+  children?: ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -11,13 +16,12 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState;
-  public props: ErrorBoundaryProps;
+  public declare props: Readonly<ErrorBoundaryProps>;
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.props = props;
     this.state = { hasError: false, error: null };
   }
 
@@ -82,7 +86,17 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 }
 
-if ('serviceWorker' in navigator) {
+// Robust check for iframe environment
+let isInIframe = false;
+try {
+  isInIframe = window.self !== window.top;
+} catch (e) {
+  // If accessing window.top throws a SecurityError, we are definitely in a cross-origin iframe
+  isInIframe = true;
+}
+
+// Only register service worker if NOT in an iframe to prevent security errors
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !isInIframe) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js')
       .then(registration => {
@@ -99,11 +113,16 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-const root = createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
-);
+try {
+  const root = createRoot(rootElement);
+  root.render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+} catch (e) {
+  console.error("Critical mounting error:", e);
+  rootElement.innerHTML = '<div style="color:white; text-align:center; padding-top:50px;">Critical Error: Failed to mount application.</div>';
+}

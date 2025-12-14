@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { VoterRecord, BloInfo } from '../types';
 import { DataTable } from './DataTable';
@@ -6,9 +5,9 @@ import { Modal } from './Modal';
 import { DownloadIcon, TrashIcon, CopyIcon, HighlightIcon, ResetIcon, HomeIcon, PlusIcon, EditIcon, ColumnsIcon, UndoIcon, RedoIcon, GeminiIcon, SearchIcon, PdfIcon, SpinnerIcon, UploadIcon, CheckCircleIcon } from './icons';
 import { useGemini } from '../hooks/useGemini';
 import { FileUpload } from './FileUpload';
-
-declare const XLSX: any;
-declare const jspdf: any;
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 interface DataEditorProps {
     initialData: VoterRecord[];
@@ -134,6 +133,21 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
             }
         };
     }, [onSave]);
+
+    // Warning before closing tab
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (saveTimeoutRef.current) {
+                e.preventDefault();
+                e.returnValue = ''; // Required for Chrome
+                return '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, []);
 
     // Handle exiting the editor - force save
     const handleExit = () => {
@@ -342,7 +356,8 @@ export const DataEditor: React.FC<DataEditorProps> = ({ initialData, initialHead
         setIsExportingPdf(true);
         setTimeout(() => {
             try {
-                const doc = new jspdf.jsPDF({ orientation: 'landscape' });
+                // Cast to any to avoid type issues with autoTable
+                const doc = new jsPDF({ orientation: 'landscape' }) as any;
                 const visibleHeaders = headers.filter(h => !hiddenColumns.has(h));
     
                 doc.setFont('helvetica', 'bold');

@@ -8,10 +8,9 @@
     <meta name="theme-color" content="#fbbf24" />
     <link rel="canonical" href="/" />
     <link rel="apple-touch-icon" href="/icon.svg">
+    <!-- Tailwind CSS (CDN kept for simplicity, can be moved to postcss if desired) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Lora:wght@400&family=Teko:wght@400&display=swap" rel="stylesheet">
@@ -19,24 +18,42 @@
       .font-copperplate-gothic { font-family: 'Cinzel Decorative', serif; }
       .font-cambria { font-family: 'Lora', serif; }
       .font-teko { font-family: 'Teko', sans-serif; }
+      
+      /* Essential for iframe embedding */
+      html, body, #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+      }
+      
       body {
         background-color: #0f172a; /* slate-900 */
         background-image: linear-gradient(to bottom right, #1e293b, #0f172a); /* slate-800 to slate-900 */
+        background-attachment: fixed;
       }
     </style>
   <script type="importmap">
 {
   "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^0.14.0"
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "url": "https://aistudiocdn.com/url@^0.11.4",
+    "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
+    "jspdf-autotable": "https://aistudiocdn.com/jspdf-autotable@^5.0.2",
+    "jspdf": "https://aistudiocdn.com/jspdf@^3.0.4"
   }
 }
 </script>
 </head>
   <body class="bg-black text-slate-200">
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <script type="module" src="/src/index.tsx"></script>
   </body>
 </html>

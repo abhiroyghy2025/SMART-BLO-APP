@@ -11,8 +11,7 @@ import { AboutPage } from './components/AboutPage';
 import { AdminDashboard } from './components/AdminDashboard';
 import { getCurrentUser, logout, updateUserData, isPersistenceActive } from './utils/auth';
 import { SpinnerIcon, AlertIcon } from './components/icons';
-
-declare const XLSX: any;
+import * as XLSX from 'xlsx';
 
 export type AppView = 'home' | 'search' | 'editor' | 'about' | 'admin';
 
@@ -34,9 +33,18 @@ const App: React.FC = () => {
     const [fileName, setFileName] = useState<string>('VoterData.xlsx');
     const [isAddVoterModalOpen, setIsAddVoterModalOpen] = useState(false);
     const [showPersistenceWarning, setShowPersistenceWarning] = useState(false);
+    const [isLaunchAnimationPlaying, setIsLaunchAnimationPlaying] = useState(true);
     
     // Key to force re-mounting of DataEditor only when file changes/resets
     const [editorSessionId, setEditorSessionId] = useState(0);
+
+    // Launch Timer
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsLaunchAnimationPlaying(false);
+        }, 3000);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Initial Auth Check
     useEffect(() => {
@@ -86,7 +94,7 @@ const App: React.FC = () => {
             try {
                 const fileData = e.target?.result;
                 if (!fileData) throw new Error("File could not be read.");
-                const workbook = XLSX.read(fileData, { type: 'binary' });
+                const workbook = XLSX.read(fileData, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
                 const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
@@ -122,7 +130,7 @@ const App: React.FC = () => {
                 setIsLoading(false);
             }
         };
-        reader.readAsBinaryString(file);
+        reader.readAsArrayBuffer(file);
     }, [currentUser, saveCurrentUserData]);
 
     const handleReset = () => {
@@ -173,12 +181,29 @@ const App: React.FC = () => {
         }
     }
 
-    if (isAuthLoading) {
+    if (isAuthLoading || isLaunchAnimationPlaying) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center">
-                <div className="text-center">
-                    <SpinnerIcon className="w-12 h-12 text-yellow-400 animate-spin mx-auto mb-4" />
-                    <p className="text-yellow-400 font-copperplate-gothic text-xl">Loading System...</p>
+            <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center z-50 fixed inset-0 font-sans">
+                <style>{`
+                    @keyframes fadeInUp {
+                        from { opacity: 0; transform: translateY(20px); }
+                        to { opacity: 1; transform: translateY(0); }
+                    }
+                    .animate-fade-in-up {
+                        animation: fadeInUp 1s ease-out forwards;
+                    }
+                `}</style>
+                <div className="text-center animate-fade-in-up">
+                    <h1 className="text-5xl md:text-7xl font-bold text-yellow-400 font-copperplate-gothic tracking-widest mb-6 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)]">
+                        Smart B.L.O.
+                    </h1>
+                    <div className="w-24 h-1 bg-gradient-to-r from-transparent via-yellow-500 to-transparent mx-auto mb-6 opacity-80"></div>
+                    <p className="text-slate-300 text-xl font-cambria tracking-wide">
+                        Developed By: <span className="text-pink-500 font-semibold drop-shadow-sm">Sukamal Roy</span>
+                    </p>
+                    <div className="mt-12 opacity-80">
+                         <SpinnerIcon className="w-10 h-10 text-yellow-500 animate-spin mx-auto" />
+                    </div>
                 </div>
             </div>
         );
